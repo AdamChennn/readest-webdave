@@ -25,16 +25,12 @@ import { saveSysSettings } from '@/helpers/settings';
 import BookCover from '@/components/BookCover';
 import Dropdown from '../Dropdown';
 import MenuItem from '../MenuItem';
-import { BookFormat } from '@/types/book';
 
 interface BookDetailViewProps {
   book: Book;
   metadata: BookMetadata | null;
   fileSize: number | null;
   formatVariants?: Book[];
-  availableFormats?: BookFormat[];
-  defaultOpenFormat?: BookFormat;
-  onDefaultOpenFormatChange?: (format: BookFormat) => void;
   onOpenFormatBook?: (book: Book) => void;
   onEdit?: () => void;
   onDelete?: () => void;
@@ -47,9 +43,6 @@ const BookDetailView: React.FC<BookDetailViewProps> = ({
   metadata,
   fileSize,
   formatVariants = [],
-  availableFormats = [],
-  defaultOpenFormat,
-  onDefaultOpenFormatChange,
   onOpenFormatBook,
   onEdit,
   onDelete,
@@ -196,30 +189,10 @@ const BookDetailView: React.FC<BookDetailViewProps> = ({
                 <div className='overflow-hidden'>
                   <span className='font-bold'>{_('Format')}</span>
                   <p className='text-neutral-content text-sm'>
-                    {availableFormats.length > 0
-                      ? availableFormats.join(', ')
+                    {formatVariants.length > 0
+                      ? Array.from(new Set(formatVariants.map((variant) => variant.format))).join(', ')
                       : book.format || _('Unknown')}
                   </p>
-                </div>
-                <div className='overflow-hidden'>
-                  <span className='font-bold'>{_('Default Open Format')}</span>
-                  {availableFormats.length > 1 && onDefaultOpenFormatChange ? (
-                    <select
-                      className='select select-bordered mt-1 h-8 min-h-8 w-full max-w-[180px] text-sm'
-                      value={defaultOpenFormat || availableFormats[0]}
-                      onChange={(e) => onDefaultOpenFormatChange(e.target.value as BookFormat)}
-                    >
-                      {availableFormats.map((format) => (
-                        <option key={format} value={format}>
-                          {format}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <p className='text-neutral-content text-sm'>
-                      {defaultOpenFormat || availableFormats[0] || book.format || _('Unknown')}
-                    </p>
-                  )}
                 </div>
                 <div className='overflow-hidden'>
                   <span className='font-bold'>{_('Open Specific Format')}</span>

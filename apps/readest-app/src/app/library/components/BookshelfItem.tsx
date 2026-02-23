@@ -101,6 +101,7 @@ interface BookshelfItemProps {
   handleSetSelectMode: (selectMode: boolean) => void;
   handleShowDetailsBook: (book: Book) => void;
   handleMergeBookInto: (book: Book) => void;
+  handleSetDefaultOpenFormat: (book: Book) => void;
   handleUpdateReadingStatus: (book: Book, status: ReadingStatus | undefined) => void;
 }
 
@@ -119,6 +120,7 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
   handleSetSelectMode,
   handleShowDetailsBook,
   handleMergeBookInto,
+  handleSetDefaultOpenFormat,
   handleUpdateReadingStatus,
 }) => {
   const _ = useTranslation();
@@ -227,9 +229,15 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
       },
     });
     const mergeBookIntoMenuItem = await MenuItem.new({
-      text: _('Merge Into...'),
+      text: '合并到...',
       action: async () => {
         handleMergeBookInto(book);
+      },
+    });
+    const setDefaultOpenFormatMenuItem = await MenuItem.new({
+      text: '默认打开格式',
+      action: async () => {
+        handleSetDefaultOpenFormat(book);
       },
     });
     const markAsFinishedMenuItem = await MenuItem.new({
@@ -285,6 +293,7 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
     menu.append(selectBookMenuItem);
     menu.append(groupBooksMenuItem);
     menu.append(mergeBookIntoMenuItem);
+    menu.append(setDefaultOpenFormatMenuItem);
     if (book.readingStatus === 'finished') {
       menu.append(markAsUnreadMenuItem);
     } else {

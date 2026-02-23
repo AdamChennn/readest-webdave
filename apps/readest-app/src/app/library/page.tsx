@@ -8,7 +8,7 @@ import { ReadonlyURLSearchParams, useRouter, useSearchParams } from 'next/naviga
 import { OverlayScrollbarsComponent, OverlayScrollbarsComponentRef } from 'overlayscrollbars-react';
 import 'overlayscrollbars/overlayscrollbars.css';
 
-import { Book } from '@/types/book';
+import { Book, BookFormat } from '@/types/book';
 import { AppService, DeleteAction } from '@/types/system';
 import { navigateToLibrary, navigateToReader, showReaderWindow } from '@/utils/nav';
 import {
@@ -44,6 +44,7 @@ import { lockScreenOrientation, selectDirectory } from '@/utils/bridge';
 import { requestStoragePermission } from '@/utils/permission';
 import { SUPPORTED_BOOK_EXTS } from '@/services/constants';
 import { tauriHandleClose, tauriHandleSetAlwaysOnTop, tauriQuitApp } from '@/utils/window';
+import { saveSysSettings } from '@/helpers/settings';
 
 import { LibraryGroupByType } from '@/types/settings';
 import { BookMetadata } from '@/libs/document';
@@ -107,6 +108,8 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   const [showDetailsBook, setShowDetailsBook] = useState<Book | null>(null);
   const [mergeSourceBook, setMergeSourceBook] = useState<Book | null>(null);
   const [mergeTargetHash, setMergeTargetHash] = useState<string>('');
+  const [defaultOpenFormatBook, setDefaultOpenFormatBook] = useState<Book | null>(null);
+  const [defaultOpenFormat, setDefaultOpenFormat] = useState<BookFormat | ''>('');
   const [currentGroupPath, setCurrentGroupPath] = useState<string | undefined>(undefined);
   const [currentSeriesAuthorGroup, setCurrentSeriesAuthorGroup] = useState<{
     groupBy: typeof LibraryGroupByType.Series | typeof LibraryGroupByType.Author;
@@ -711,6 +714,57 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
         .sort((a, b) => b.updatedAt - a.updatedAt)
     : [];
 
+  const handleSetDefaultOpenFormat = (sourceBook: Book) => {
+    const groupScope = getGroupScope(sourceBook);
+    const workKey = getBookWorkKey(sourceBook);
+    const variants = libraryBooks
+      .filter((book) => !book.deletedAt)
+      .filter((book) => getGroupScope(book) === groupScope)
+      .filter((book) => getBookWorkKey(book) === workKey);
+    const formats = Array.from(new Set(variants.map((book) => book.format)));
+    if (formats.length <= 1) {
+      eventDispatcher.dispatch('toast', {
+        type: 'warning',
+        message: _('This book currently has only one format'),
+      });
+      return;
+    }
+    const currentDefault = settings.defaultOpenFormatByWork?.[workKey] || formats[0]!;
+    setDefaultOpenFormatBook(sourceBook);
+    setDefaultOpenFormat(currentDefault);
+  };
+
+  const handleCancelDefaultOpenFormatDialog = () => {
+    setDefaultOpenFormatBook(null);
+    setDefaultOpenFormat('');
+  };
+
+  const handleConfirmDefaultOpenFormat = async () => {
+    if (!defaultOpenFormatBook || !defaultOpenFormat) return;
+    const workKey = getBookWorkKey(defaultOpenFormatBook);
+    const next = {
+      ...(settings.defaultOpenFormatByWork || {}),
+      [workKey]: defaultOpenFormat,
+    };
+    await saveSysSettings(envConfig, 'defaultOpenFormatByWork', next);
+    eventDispatcher.dispatch('toast', {
+      type: 'info',
+      message: _('Default open format updated'),
+    });
+    handleCancelDefaultOpenFormatDialog();
+  };
+
+  const defaultOpenFormatVariants = defaultOpenFormatBook
+    ? libraryBooks
+        .filter((book) => !book.deletedAt)
+        .filter((book) => getGroupScope(book) === getGroupScope(defaultOpenFormatBook))
+        .filter((book) => getBookWorkKey(book) === getBookWorkKey(defaultOpenFormatBook))
+        .sort((a, b) => a.format.localeCompare(b.format))
+    : [];
+  const defaultOpenFormatOptions = Array.from(
+    new Set(defaultOpenFormatVariants.map((book) => book.format)),
+  );
+
   const handleNavigateToPath = (path: string | undefined) => {
     const group = path ? getGroupId(path) : '';
     const params = new URLSearchParams(searchParams?.toString());
@@ -857,6 +911,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
                 handleSetSelectMode={handleSetSelectMode}
                 handleShowDetailsBook={handleShowDetailsBook}
                 handleMergeBookInto={handleMergeBookInto}
+                handleSetDefaultOpenFormat={handleSetDefaultOpenFormat}
                 booksTransferProgress={{}}
                 handlePushLibrary={pushLibrary}
               />
@@ -894,7 +949,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       {mergeSourceBook && (
         <div className='fixed inset-0 z-50 flex items-center justify-center'>
           <Dialog
-            title={_('Merge Into...')}
+            title='合并到...'
             isOpen={!!mergeSourceBook}
             onClose={handleCancelMergeDialog}
             boxClassName='sm:min-w-[520px] sm:max-w-[520px] sm:h-auto sm:max-h-[80%]'
@@ -939,6 +994,51 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
                   disabled={!mergeTargetHash}
                 >
                   {_('Merge')}
+                </button>
+              </div>
+            </div>
+          </Dialog>
+        </div>
+      )}
+      {defaultOpenFormatBook && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center'>
+          <Dialog
+            title='默认打开格式'
+            isOpen={!!defaultOpenFormatBook}
+            onClose={handleCancelDefaultOpenFormatDialog}
+            boxClassName='sm:min-w-[420px] sm:max-w-[420px] sm:h-auto sm:max-h-[80%]'
+          >
+            <div className='flex flex-col gap-3 p-4'>
+              <p className='text-sm'>
+                {_('Choose default format')}: {defaultOpenFormatBook.title}
+              </p>
+              <div className='border-base-300 max-h-80 overflow-auto rounded border'>
+                {defaultOpenFormatOptions.map((format) => (
+                  <label
+                    key={format}
+                    className='border-base-300 hover:bg-base-200 flex cursor-pointer items-center gap-3 border-b px-3 py-2 last:border-b-0'
+                  >
+                    <input
+                      type='radio'
+                      className='radio radio-sm'
+                      name='default-open-format'
+                      checked={defaultOpenFormat === format}
+                      onChange={() => setDefaultOpenFormat(format)}
+                    />
+                    <div className='text-sm font-medium'>{format}</div>
+                  </label>
+                ))}
+              </div>
+              <div className='flex justify-end gap-2'>
+                <button className='btn btn-ghost' onClick={handleCancelDefaultOpenFormatDialog}>
+                  {_('Cancel')}
+                </button>
+                <button
+                  className='btn btn-primary'
+                  onClick={handleConfirmDefaultOpenFormat}
+                  disabled={!defaultOpenFormat}
+                >
+                  {_('Confirm')}
                 </button>
               </div>
             </div>
