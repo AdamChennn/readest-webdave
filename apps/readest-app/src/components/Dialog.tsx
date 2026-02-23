@@ -80,9 +80,10 @@ const Dialog: React.FC<DialogProps> = ({
     previousActiveElementRef.current = document.activeElement as HTMLElement;
 
     setIsFullHeightInMobile(!snapHeight && isMobile);
+    const dialogElement = dialogRef.current;
     window.addEventListener('keydown', handleKeyDown);
-    if (dialogRef.current) {
-      dialogRef.current.addEventListener('keydown', handleKeyDown);
+    if (dialogElement) {
+      dialogElement.addEventListener('keydown', handleKeyDown);
     }
     if (appService?.isAndroidApp) {
       acquireBackKeyInterception();
@@ -97,6 +98,9 @@ const Dialog: React.FC<DialogProps> = ({
     return () => {
       clearTimeout(timer);
       window.removeEventListener('keydown', handleKeyDown);
+      if (dialogElement) {
+        dialogElement.removeEventListener('keydown', handleKeyDown);
+      }
       if (appService?.isAndroidApp) {
         releaseBackKeyInterception();
         eventDispatcher.offSync('native-key-down', handleKeyDown);

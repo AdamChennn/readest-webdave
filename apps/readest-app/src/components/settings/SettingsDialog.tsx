@@ -194,10 +194,14 @@ const SettingsDialog: React.FC<{ bookKey: string; isOpen: boolean }> = ({ bookKe
   }, [isOpen, activeSettingsItemId, activePanel, setActiveSettingsItemId]);
 
   useEffect(() => {
+    if (!isOpen) return;
+
     setFontPanelView('main-fonts');
 
     const container = tabsRef.current;
     if (!container) return;
+
+    let rafId: number | null = null;
 
     const checkButtonWidths = () => {
       const threshold = (container.clientWidth - 64) * 0.22;
@@ -221,21 +225,25 @@ const SettingsDialog: React.FC<{ bookKey: string; isOpen: boolean }> = ({ bookKe
       setShowAllTabLabels(!hideLabel);
     };
 
-    checkButtonWidths();
+    const scheduleWidthCheck = () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+      rafId = requestAnimationFrame(checkButtonWidths);
+    };
 
-    const resizeObserver = new ResizeObserver(checkButtonWidths);
+    scheduleWidthCheck();
+
+    const resizeObserver = new ResizeObserver(scheduleWidthCheck);
     resizeObserver.observe(container);
-    const mutationObserver = new MutationObserver(checkButtonWidths);
-    mutationObserver.observe(container, {
-      subtree: true,
-      characterData: true,
-    });
 
     return () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
       resizeObserver.disconnect();
-      mutationObserver.disconnect();
     };
-  }, [setFontPanelView]);
+  }, [isOpen, setFontPanelView]);
 
   const currentPanel = tabConfig.find((tab) => tab.tab === activePanel);
 
