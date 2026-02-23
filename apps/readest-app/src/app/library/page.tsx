@@ -10,7 +10,7 @@ import 'overlayscrollbars/overlayscrollbars.css';
 
 import { Book } from '@/types/book';
 import { AppService, DeleteAction } from '@/types/system';
-import { navigateToLibrary, navigateToReader } from '@/utils/nav';
+import { navigateToLibrary, navigateToReader, showReaderWindow } from '@/utils/nav';
 import {
   formatAuthors,
   formatTitle,
@@ -546,6 +546,32 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     });
   };
 
+  const handleOpenBookFormat = async (book: Book) => {
+    if (!appService) return;
+    if (!(await appService.isBookAvailable(book))) {
+      eventDispatcher.dispatch('toast', {
+        type: 'error',
+        message: _('Book file is not available'),
+      });
+      return;
+    }
+    setShowDetailsBook(null);
+    if (appService?.hasWindow && settings.openBookInNewWindow) {
+      showReaderWindow(appService, [book.hash]);
+      return;
+    }
+    navigateToReader(router, [book.hash]);
+  };
+
+  const handleDeleteBookVariants = async (books: Book[]) => {
+    const deleteOne = handleBookDelete('both');
+    for (const variant of books) {
+      await deleteOne(variant, false);
+    }
+    await pushLibrary();
+    setShowDetailsBook(null);
+  };
+
   const handleImportBooksFromDirectory = async () => {
     if (!appService || !isTauriAppPlatform()) return;
 
@@ -777,6 +803,8 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           book={showDetailsBook}
           onClose={() => setShowDetailsBook(null)}
           handleBookDelete={handleBookDelete('both')}
+          handleDeleteBookVariants={handleDeleteBookVariants}
+          handleOpenBookFormat={handleOpenBookFormat}
           handleBookMetadataUpdate={handleUpdateMetadata}
         />
       )}

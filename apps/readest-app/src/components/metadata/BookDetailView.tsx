@@ -31,11 +31,14 @@ interface BookDetailViewProps {
   book: Book;
   metadata: BookMetadata | null;
   fileSize: number | null;
+  formatVariants?: Book[];
   availableFormats?: BookFormat[];
   defaultOpenFormat?: BookFormat;
   onDefaultOpenFormatChange?: (format: BookFormat) => void;
+  onOpenFormatBook?: (book: Book) => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onDeleteAllFormats?: () => void;
   onExport?: () => void;
 }
 
@@ -43,11 +46,14 @@ const BookDetailView: React.FC<BookDetailViewProps> = ({
   book,
   metadata,
   fileSize,
+  formatVariants = [],
   availableFormats = [],
   defaultOpenFormat,
   onDefaultOpenFormatChange,
+  onOpenFormatBook,
   onEdit,
   onDelete,
+  onDeleteAllFormats,
   onExport,
 }) => {
   const _ = useTranslation();
@@ -114,6 +120,14 @@ const BookDetailView: React.FC<BookDetailViewProps> = ({
                     label={_('Remove from Device')}
                     onClick={onDelete}
                   />
+                  {onDeleteAllFormats && formatVariants.length > 1 && (
+                    <MenuItem
+                      noIcon
+                      transient
+                      label={_('Remove All Formats')}
+                      onClick={onDeleteAllFormats}
+                    />
+                  )}
                 </div>
               </Dropdown>
             )}
@@ -206,6 +220,25 @@ const BookDetailView: React.FC<BookDetailViewProps> = ({
                       {defaultOpenFormat || availableFormats[0] || book.format || _('Unknown')}
                     </p>
                   )}
+                </div>
+                <div className='overflow-hidden'>
+                  <span className='font-bold'>{_('Open Specific Format')}</span>
+                  <div className='mt-1 flex flex-wrap gap-1'>
+                    {formatVariants.length > 0 ? (
+                      formatVariants.map((variant) => (
+                        <button
+                          key={variant.hash}
+                          className='btn btn-xs'
+                          onClick={() => onOpenFormatBook?.(variant)}
+                          disabled={!onOpenFormatBook}
+                        >
+                          {variant.format}
+                        </button>
+                      ))
+                    ) : (
+                      <p className='text-neutral-content text-sm'>{_('Unknown')}</p>
+                    )}
+                  </div>
                 </div>
                 <div className='overflow-hidden'>
                   <span className='font-bold'>{_('File Size')}</span>

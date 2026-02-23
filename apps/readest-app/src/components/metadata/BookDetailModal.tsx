@@ -26,6 +26,8 @@ interface BookDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   handleBookDelete?: (book: Book) => void;
+  handleDeleteBookVariants?: (books: Book[]) => void;
+  handleOpenBookFormat?: (book: Book) => void;
   handleBookMetadataUpdate?: (book: Book, updatedMetadata: BookMetadata) => void;
 }
 
@@ -40,6 +42,8 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
   isOpen,
   onClose,
   handleBookDelete,
+  handleDeleteBookVariants,
+  handleOpenBookFormat,
   handleBookMetadataUpdate,
 }) => {
   const _ = useTranslation();
@@ -223,11 +227,16 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 book={book}
                 metadata={bookMeta}
                 fileSize={fileSize}
+                formatVariants={variants}
                 availableFormats={availableFormats}
                 defaultOpenFormat={defaultOpenFormat}
                 onDefaultOpenFormatChange={handleDefaultOpenFormatChange}
+                onOpenFormatBook={handleOpenBookFormat}
                 onEdit={handleBookMetadataUpdate ? handleEditMetadata : undefined}
                 onDelete={handleBookDelete ? handleDelete : undefined}
+                onDeleteAllFormats={
+                  handleDeleteBookVariants ? () => handleDeleteBookVariants(variants) : undefined
+                }
                 onExport={handleBookExport}
               />
             )}

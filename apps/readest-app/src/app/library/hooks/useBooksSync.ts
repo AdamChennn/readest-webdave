@@ -8,6 +8,7 @@ import { throttle } from '@/utils/throttle';
 import { eventDispatcher } from '@/utils/event';
 import WebDAVRecordSyncService from '@/services/sync/webdavRecordSyncService';
 import { isWebDAVUnavailableError } from '@/services/sync/errors';
+import SyncService from '@/services/sync/syncService';
 
 export const useBooksSync = () => {
   const _ = useTranslation();
@@ -23,11 +24,14 @@ export const useBooksSync = () => {
     // Avoid spamming the same toast during periodic auto-sync retries.
     if (now - lastUnavailableToastAtRef.current < 15000) return;
     lastUnavailableToastAtRef.current = now;
+    SyncService.removeSyncUtil(envConfig).catch(() => {
+      // ignore cache reset failures
+    });
     eventDispatcher.dispatch('toast', {
       type: 'error',
       message: _('WebDAV 同步不可用'),
     });
-  }, [_]);
+  }, [_, envConfig]);
 
   const pullLibrary = useCallback(
     async (_fullRefresh = false, verbose = false) => {
