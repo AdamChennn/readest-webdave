@@ -330,7 +330,7 @@ export const nativeFileSystem: FileSystem = {
           size: file.size,
         }));
       } catch (e) {
-        console.error('Rust read_dir failed, falling back to JS recursion', e);
+        console.warn('Rust read_dir failed, falling back to JS recursion', e);
       }
     }
 

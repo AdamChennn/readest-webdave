@@ -7,7 +7,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { isOPDSCatalog, getPublication, getFeed, getOpenSearch } from 'foliate-js/opds.js';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { useEnv } from '@/context/EnvContext';
-import { useAuth } from '@/context/AuthContext';
 import { isWebAppPlatform } from '@/services/environment';
 import { downloadFile } from '@/libs/storage';
 import { Toast } from '@/components/Toast';
@@ -15,8 +14,6 @@ import { useThemeStore } from '@/store/themeStore';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { transferManager } from '@/services/transferManager';
-import { useTransferQueue } from '@/hooks/useTransferQueue';
 import { useTheme } from '@/hooks/useTheme';
 import { useLibrary } from '@/hooks/useLibrary';
 import { eventDispatcher } from '@/utils/event';
@@ -64,7 +61,6 @@ export default function BrowserPage() {
   const _ = useTranslation();
   const router = useRouter();
   const { appService } = useEnv();
-  const { user } = useAuth();
   const { libraryLoaded } = useLibrary();
   const { safeAreaInsets, isRoundedWindow } = useThemeStore();
   const { settings } = useSettingsStore();
@@ -85,6 +81,7 @@ export default function BrowserPage() {
   const searchParams = useSearchParams();
   const catalogUrl = searchParams?.get('url') || '';
   const catalogId = searchParams?.get('id') || '';
+  const opdsCatalogs = settings.opdsCatalogs;
   const usernameRef = useRef<string | null | undefined>(undefined);
   const passwordRef = useRef<string | null | undefined>(undefined);
   const startURLRef = useRef<string | null | undefined>(undefined);
@@ -94,7 +91,6 @@ export default function BrowserPage() {
   const searchTermRef = useRef('');
 
   useTheme({ systemUIVisible: false });
-  useTransferQueue(libraryLoaded);
 
   useEffect(() => {
     startURLRef.current = state.startURL;
@@ -312,7 +308,9 @@ export default function BrowserPage() {
   useEffect(() => {
     const url = catalogUrl;
     if (url && !isNavigatingHistoryRef.current) {
-      const catalog = settings.opdsCatalogs?.find((cat) => cat.id === catalogId);
+      const catalog = opdsCatalogs?.find(
+        (cat: { id: string; username?: string; password?: string }) => cat.id === catalogId,
+      );
       const { username, password } = catalog || {};
       if (username || password) {
         usernameRef.current = username;
@@ -330,7 +328,7 @@ export default function BrowserPage() {
       setViewMode('error');
       setError(new Error('No OPDS URL provided'));
     }
-  }, [catalogUrl, catalogId, settings, libraryLoaded, loadOPDS]);
+  }, [catalogUrl, catalogId, opdsCatalogs, libraryLoaded, loadOPDS]);
 
   const handleNavigate = useCallback(
     (url: string, isSearch = false) => {
@@ -464,11 +462,6 @@ export default function BrowserPage() {
 
           const { library, setLibrary } = useLibraryStore.getState();
           const book = await appService.importBook(dstFilePath, library);
-          if (user && book && !book.uploadedAt && settings.autoUpload) {
-            setTimeout(() => {
-              transferManager.queueUpload(book);
-            }, 3000);
-          }
           setLibrary(library);
           appService.saveLibraryBooks(library);
           return book;
@@ -479,8 +472,7 @@ export default function BrowserPage() {
       }
       return;
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user, state.baseURL, appService, libraryLoaded],
+    [state.baseURL, appService, libraryLoaded],
   );
 
   const handleGenerateCachedImageUrl = useCallback(

@@ -13,18 +13,13 @@ import { AppService, DeleteAction } from '@/types/system';
 import { navigateToLibrary, navigateToReader } from '@/utils/nav';
 import { formatAuthors, formatTitle, getPrimaryLanguage, listFormater } from '@/utils/book';
 import { eventDispatcher } from '@/utils/event';
-import { ProgressPayload } from '@/utils/transfer';
-import { throttle } from '@/utils/throttle';
-import { transferManager } from '@/services/transferManager';
 import { getDirPath, getFilename, joinPaths } from '@/utils/path';
 import { parseOpenWithFiles } from '@/helpers/openWith';
 import { isTauriAppPlatform, isWebAppPlatform } from '@/services/environment';
-import { checkForAppUpdates, checkAppReleaseNotes } from '@/helpers/updater';
 import { impactFeedback } from '@tauri-apps/plugin-haptics';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 
 import { useEnv } from '@/context/EnvContext';
-import { useAuth } from '@/context/AuthContext';
 import { useThemeStore } from '@/store/themeStore';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useLibraryStore } from '@/store/libraryStore';
@@ -36,29 +31,19 @@ import { useUICSS } from '@/hooks/useUICSS';
 import { useDemoBooks } from './hooks/useDemoBooks';
 import { useBooksSync } from './hooks/useBooksSync';
 import { useBookDataStore } from '@/store/bookDataStore';
-import { useTransferStore } from '@/store/transferStore';
-import { useScreenWakeLock } from '@/hooks/useScreenWakeLock';
 import { useOpenWithBooks } from '@/hooks/useOpenWithBooks';
 import { SelectedFile, useFileSelector } from '@/hooks/useFileSelector';
 import { lockScreenOrientation, selectDirectory } from '@/utils/bridge';
 import { requestStoragePermission } from '@/utils/permission';
 import { SUPPORTED_BOOK_EXTS } from '@/services/constants';
-import {
-  tauriHandleClose,
-  tauriHandleSetAlwaysOnTop,
-  tauriHandleToggleFullScreen,
-  tauriQuitApp,
-} from '@/utils/window';
+import { tauriHandleClose, tauriHandleSetAlwaysOnTop, tauriQuitApp } from '@/utils/window';
 
 import { LibraryGroupByType } from '@/types/settings';
 import { BookMetadata } from '@/libs/document';
-import { AboutWindow } from '@/components/AboutWindow';
 import { BookDetailModal } from '@/components/metadata';
-import { UpdaterWindow } from '@/components/UpdaterWindow';
 import { CatalogDialog } from './components/OPDSDialog';
 import { MigrateDataWindow } from './components/MigrateDataWindow';
 import { useDragDropImport } from './hooks/useDragDropImport';
-import { useTransferQueue } from '@/hooks/useTransferQueue';
 import { Toast } from '@/components/Toast';
 import {
   createBookGroups,
@@ -73,8 +58,6 @@ import GroupHeader from './components/GroupHeader';
 import useShortcuts from '@/hooks/useShortcuts';
 import DropIndicator from '@/components/DropIndicator';
 import SettingsDialog from '@/components/settings/SettingsDialog';
-import ModalPortal from '@/components/ModalPortal';
-import TransferQueuePanel from './components/TransferQueuePanel';
 
 const LibraryPageWithSearchParams = () => {
   const searchParams = useSearchParams();
@@ -84,7 +67,6 @@ const LibraryPageWithSearchParams = () => {
 const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchParams | null }) => {
   const router = useRouter();
   const { envConfig, appService } = useEnv();
-  const { token, user } = useAuth();
   const {
     library: libraryBooks,
     isSyncing,
@@ -104,9 +86,8 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   const { selectFiles } = useFileSelector(appService, _);
   const { safeAreaInsets: insets, isRoundedWindow } = useThemeStore();
   const { clearBookData } = useBookDataStore();
-  const { settings, setSettings, saveSettings } = useSettingsStore();
+  const { settings, setSettings } = useSettingsStore();
   const { isSettingsDialogOpen, setSettingsDialogOpen } = useSettingsStore();
-  const { isTransferQueueOpen } = useTransferStore();
   const [showCatalogManager, setShowCatalogManager] = useState(
     searchParams?.get('opds') === 'true',
   );
@@ -121,9 +102,6 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     groupBy: typeof LibraryGroupByType.Series | typeof LibraryGroupByType.Author;
     groupName: string;
   } | null>(null);
-  const [booksTransferProgress, setBooksTransferProgress] = useState<{
-    [key: string]: number | null;
-  }>({});
   const [pendingNavigationBookIds, setPendingNavigationBookIds] = useState<string[] | null>(null);
   const isInitiating = useRef(false);
 
@@ -138,7 +116,6 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   useUICSS();
 
   useOpenWithBooks();
-  useTransferQueue(libraryLoaded);
 
   const { pullLibrary, pushLibrary } = useBooksSync();
   const { isDragging } = useDragDropImport();
@@ -148,14 +125,8 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     pullLibrary.bind(null, false, true),
     pullLibrary.bind(null, true, true),
   );
-  useScreenWakeLock(settings.screenWakeLock);
 
   useShortcuts({
-    onToggleFullscreen: async () => {
-      if (isTauriAppPlatform()) {
-        await tauriHandleToggleFullScreen();
-      }
-    },
     onCloseWindow: async () => {
       if (isTauriAppPlatform()) {
         await tauriHandleClose();
@@ -179,19 +150,10 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   }, [searchParams]);
 
   useEffect(() => {
-    const doCheckAppUpdates = async () => {
-      if (appService?.hasUpdater && settings.autoCheckUpdates) {
-        await checkForAppUpdates(_);
-      } else if (appService?.hasUpdater === false) {
-        checkAppReleaseNotes();
-      }
-    };
     if (settings.alwaysOnTop) {
       tauriHandleSetAlwaysOnTop(settings.alwaysOnTop);
     }
-    doCheckAppUpdates();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appService?.hasUpdater, settings]);
+  }, [settings.alwaysOnTop]);
 
   useEffect(() => {
     if (appService?.isMobileApp) {
@@ -255,13 +217,6 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           const book = await appService.importBook(file, libraryBooks, true, true, false, temp);
           if (book) {
             bookIds.push(book.hash);
-          }
-          if (user && book && !temp && !book.uploadedAt && settings.autoUpload) {
-            setTimeout(() => {
-              console.log('Queueing upload for book:', book.title);
-              transferManager.queueUpload(book);
-              // wait for the initialization of the transfer manager and opening of the book
-            }, 3000);
           }
         } catch (error) {
           console.log('Failed to import book:', file, error);
@@ -327,20 +282,6 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     if (isInitiating.current) return;
     isInitiating.current = true;
 
-    const initLogin = async () => {
-      const appService = await envConfig.getAppService();
-      const settings = await appService.loadSettings();
-      if (token && user) {
-        if (!settings.keepLogin) {
-          settings.keepLogin = true;
-          setSettings(settings);
-          saveSettings(envConfig, settings);
-        }
-      } else if (settings.keepLogin) {
-        router.push('/auth');
-      }
-    };
-
     const loadingTimeout = setTimeout(() => setLoading(true), 300);
     const initLibrary = async () => {
       const appService = await envConfig.getAppService();
@@ -374,7 +315,6 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       return false;
     };
 
-    initLogin();
     initLibrary();
     return () => {
       setCheckOpenWithBooks(false);
@@ -468,10 +408,6 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           book.groupId = getGroupId(groupName);
         }
 
-        if (user && !book.uploadedAt && settings.autoUpload) {
-          console.log('Queueing upload for book:', book.title);
-          transferManager.queueUpload(book);
-        }
         successfulImports.push(book.title);
         return book;
       } catch (error) {
@@ -521,125 +457,39 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     setLoading(false);
   };
 
-  const updateBookTransferProgress = throttle((bookHash: string, progress: ProgressPayload) => {
-    if (progress.total === 0) return;
-    const progressPct = (progress.progress / progress.total) * 100;
-    setBooksTransferProgress((prev) => ({
-      ...prev,
-      [bookHash]: progressPct,
-    }));
-  }, 500);
-
   const handleBookUpload = useCallback(
-    async (book: Book, _syncBooks = true) => {
-      // Use transfer queue for uploads - priority 1 for manual uploads (higher priority)
-      const transferId = transferManager.queueUpload(book, 1);
-      if (transferId) {
-        eventDispatcher.dispatch('toast', {
-          type: 'info',
-          timeout: 2000,
-          message: _('Upload queued: {{title}}', {
-            title: book.title,
-          }),
-        });
-        return true;
-      }
+    async () => {
       return false;
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
   const handleBookDownload = useCallback(
-    async (book: Book, downloadOptions: { redownload?: boolean; queued?: boolean } = {}) => {
-      const { redownload = false, queued = false } = downloadOptions;
-      if (redownload || !queued) {
-        try {
-          await appService?.downloadBook(book, false, redownload, (progress) => {
-            updateBookTransferProgress(book.hash, progress);
-          });
-          await updateBook(envConfig, book);
-          eventDispatcher.dispatch('toast', {
-            type: 'info',
-            timeout: 2000,
-            message: _('Book downloaded: {{title}}', {
-              title: book.title,
-            }),
-          });
-          return true;
-        } catch {
-          eventDispatcher.dispatch('toast', {
-            message: _('Failed to download book: {{title}}', {
-              title: book.title,
-            }),
-            type: 'error',
-          });
-          return false;
-        }
-      }
-
-      // Use transfer queue for normal downloads - priority 1 for manual downloads
-      const transferId = transferManager.queueDownload(book, 1);
-      if (transferId) {
-        eventDispatcher.dispatch('toast', {
-          type: 'info',
-          timeout: 2000,
-          message: _('Download queued: {{title}}', {
-            title: book.title,
-          }),
-        });
-        return true;
-      }
+    async () => {
       return false;
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [appService],
+    [],
   );
 
-  const handleBookDelete = (deleteAction: DeleteAction) => {
+  const handleBookDelete = (_deleteAction: DeleteAction) => {
     return async (book: Book, syncBooks = true) => {
-      const deletionMessages = {
-        both: _('Book deleted: {{title}}', { title: book.title }),
-        cloud: _('Deleted cloud backup of the book: {{title}}', { title: book.title }),
-        local: _('Deleted local copy of the book: {{title}}', { title: book.title }),
-      };
-      const deletionFailMessages = {
-        both: _('Failed to delete book: {{title}}', { title: book.title }),
-        cloud: _('Failed to delete cloud backup of the book: {{title}}', { title: book.title }),
-        local: _('Failed to delete local copy of the book: {{title}}', { title: book.title }),
-      };
-
       try {
-        // Handle local deletion immediately
-        if (deleteAction === 'local' || deleteAction === 'both') {
-          await appService?.deleteBook(book, 'local');
-          if (deleteAction === 'both') {
-            book.deletedAt = Date.now();
-            book.downloadedAt = null;
-            book.coverDownloadedAt = null;
-          }
-          await updateBook(envConfig, book);
-          clearBookData(book.hash);
-          if (syncBooks) pushLibrary();
-        }
-
-        // Queue cloud deletion
-        if (deleteAction === 'cloud' || deleteAction === 'both') {
-          const transferId = transferManager.queueDelete(book, 1, true);
-          if (!transferId) {
-            throw new Error('Failed to queue cloud deletion');
-          }
-        }
-
+        await appService?.deleteBook(book, 'local');
+        book.deletedAt = Date.now();
+        book.downloadedAt = null;
+        book.coverDownloadedAt = null;
+        await updateBook(envConfig, book);
+        clearBookData(book.hash);
+        if (syncBooks) pushLibrary();
         eventDispatcher.dispatch('toast', {
           type: 'info',
           timeout: 1000,
-          message: deletionMessages[deleteAction],
+          message: _('Book deleted: {{title}}', { title: book.title }),
         });
         return true;
       } catch {
         eventDispatcher.dispatch('toast', {
-          message: deletionFailMessages[deleteAction],
+          message: _('Failed to delete book: {{title}}', { title: book.title }),
           type: 'error',
         });
         return false;
@@ -890,7 +740,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
                 handleBookDelete={handleBookDelete('both')}
                 handleSetSelectMode={handleSetSelectMode}
                 handleShowDetailsBook={handleShowDetailsBook}
-                booksTransferProgress={booksTransferProgress}
+                booksTransferProgress={{}}
                 handlePushLibrary={pushLibrary}
               />
             </div>
@@ -918,21 +768,10 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           isOpen={!!showDetailsBook}
           book={showDetailsBook}
           onClose={() => setShowDetailsBook(null)}
-          handleBookUpload={handleBookUpload}
-          handleBookDownload={handleBookDownload}
           handleBookDelete={handleBookDelete('both')}
-          handleBookDeleteCloudBackup={handleBookDelete('cloud')}
-          handleBookDeleteLocalCopy={handleBookDelete('local')}
           handleBookMetadataUpdate={handleUpdateMetadata}
         />
       )}
-      {isTransferQueueOpen && (
-        <ModalPortal>
-          <TransferQueuePanel />
-        </ModalPortal>
-      )}
-      <AboutWindow />
-      <UpdaterWindow />
       <MigrateDataWindow />
       {isSettingsDialogOpen && <SettingsDialog bookKey={''} />}
       {showCatalogManager && <CatalogDialog onClose={handleDismissOPDSDialog} />}

@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { SystemSettings } from '@/types/settings';
 import { EnvConfigType } from '@/services/environment';
 import { initDayjs } from '@/utils/time';
+import { SyncRecordService } from '@/services/sync/syncRecordService';
 
 export type FontPanelView = 'main-fonts' | 'custom-fonts';
 
@@ -35,6 +36,11 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   saveSettings: async (envConfig: EnvConfigType, settings: SystemSettings) => {
     const appService = await envConfig.getAppService();
     await appService.saveSettings(settings);
+    await SyncRecordService.setSyncRecord(
+      envConfig,
+      { type: 'config', catergory: 'readerConfig', name: 'settings', key: 'all' },
+      { operation: 'update', time: Date.now() },
+    );
   },
   setSettingsDialogBookKey: (bookKey) => set({ settingsDialogBookKey: bookKey }),
   setSettingsDialogOpen: (open) => set({ isSettingsDialogOpen: open }),

@@ -4,6 +4,7 @@ import { Book, BookConfig, BookNote } from '@/types/book';
 import { EnvConfigType } from '@/services/environment';
 import { BookDoc } from '@/libs/document';
 import { useLibraryStore } from './libraryStore';
+import { SyncRecordService } from '@/services/sync/syncRecordService';
 
 interface BookData {
   /* Persistent data shared with different views of the same book */
@@ -90,6 +91,16 @@ export const useBookDataStore = create<BookDataState>((set, get) => ({
     config.updatedAt = Date.now();
     await appService.saveBookConfig(book, config, settings);
     await appService.saveLibraryBooks(library);
+    await SyncRecordService.setSyncRecord(
+      envConfig,
+      {
+        type: 'config',
+        catergory: 'objectConfig',
+        name: 'bookConfig',
+        key: book.hash,
+      },
+      { operation: 'update', time: Date.now() },
+    );
   },
   updateBooknotes: (key: string, booknotes: BookNote[]) => {
     let updatedConfig: BookConfig | undefined;

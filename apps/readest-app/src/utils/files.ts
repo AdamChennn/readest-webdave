@@ -5,7 +5,9 @@ export const copyFiles = async (appService: AppService, srcDir: string, dstDir: 
   try {
     filesToCopy = await appService.readDirectory(srcDir, 'None');
   } catch {
-    throw new Error(`Dir ${srcDir} failed to read.`);
+    // Source directory may legitimately not exist on fresh installs/migrations.
+    console.warn(`Dir ${srcDir} not readable, skipping copy.`);
+    return;
   }
 
   for (let i = 0; i < filesToCopy.length; i++) {

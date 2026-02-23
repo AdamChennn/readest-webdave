@@ -3,6 +3,7 @@ import { Book, BookGroupType, BooksGroup } from '@/types/book';
 import { EnvConfigType, isTauriAppPlatform } from '@/services/environment';
 import { BOOK_UNGROUPED_NAME } from '@/services/constants';
 import { md5Fingerprint } from '@/utils/md5';
+import { SyncRecordService } from '@/services/sync/syncRecordService';
 
 interface LibraryState {
   library: Book[]; // might contain deleted books
@@ -70,6 +71,16 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     }
     set({ library: [...library] });
     await appService.saveLibraryBooks(library);
+    await SyncRecordService.setSyncRecord(
+      envConfig,
+      {
+        type: 'database',
+        catergory: 'sqlite',
+        name: 'books',
+        key: book.hash,
+      },
+      { operation: book.deletedAt ? 'delete' : 'update', time: Date.now() },
+    );
   },
   updateBooks: async (envConfig: EnvConfigType, books: Book[]) => {
     if (!books?.length) return;
@@ -81,6 +92,20 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set({ library: newLibrary });
     refreshGroups();
     await appService.saveLibraryBooks(newLibrary);
+    await Promise.all(
+      books.map((book) =>
+        SyncRecordService.setSyncRecord(
+          envConfig,
+          {
+            type: 'database',
+            catergory: 'sqlite',
+            name: 'books',
+            key: book.hash,
+          },
+          { operation: book.deletedAt ? 'delete' : 'save', time: Date.now() },
+        ),
+      ),
+    );
   },
 
   setSelectedBooks: (ids: string[]) => {

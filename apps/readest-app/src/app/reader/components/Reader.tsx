@@ -14,15 +14,11 @@ import { useSidebarStore } from '@/store/sidebarStore';
 import { useNotebookStore } from '@/store/notebookStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useDeviceControlStore } from '@/store/deviceStore';
-import { useScreenWakeLock } from '@/hooks/useScreenWakeLock';
-import { useTransferQueue } from '@/hooks/useTransferQueue';
 import { eventDispatcher } from '@/utils/event';
 import { interceptWindowOpen } from '@/utils/open';
 import { mountAdditionalFonts } from '@/styles/fonts';
 import { isTauriAppPlatform } from '@/services/environment';
 import { getSysFontsList, setSystemUIVisibility } from '@/utils/bridge';
-import { AboutWindow } from '@/components/AboutWindow';
-import { UpdaterWindow } from '@/components/UpdaterWindow';
 import { KOSyncSettingsWindow } from './KOSyncSettings';
 import { ProofreadRulesManager } from './ProofreadRules';
 import { Toast } from '@/components/Toast';
@@ -68,8 +64,6 @@ const Reader: React.FC<{ ids?: string }> = ({ ids }) => {
   const { isDarkMode, systemUIAlwaysHidden, isRoundedWindow } = useThemeStore();
 
   useTheme({ systemUIVisible: settings.alwaysShowStatusBar, appThemeColor: 'base-100' });
-  useScreenWakeLock(settings.screenWakeLock);
-  useTransferQueue(libraryLoaded, 5000);
 
   useEffect(() => {
     mountAdditionalFonts(document);
@@ -166,8 +160,6 @@ const Reader: React.FC<{ ids?: string }> = ({ ids }) => {
     >
       <Suspense fallback={<div className='full-height'></div>}>
         <ReaderContent ids={ids} settings={settings} />
-        <AboutWindow />
-        <UpdaterWindow />
         <KOSyncSettingsWindow />
         <ProofreadRulesManager />
         <Toast />

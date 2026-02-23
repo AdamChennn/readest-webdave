@@ -17,6 +17,7 @@ import {
 } from '@/types/book';
 import {
   KOSyncSettings,
+  WebDAVSyncSettings,
   LibraryGroupByType,
   LibrarySortByType,
   ReadSettings,
@@ -34,6 +35,7 @@ export const LOCAL_FONTS_SUBDIR = `${DATA_SUBDIR}/Fonts`;
 export const LOCAL_IMAGES_SUBDIR = `${DATA_SUBDIR}/Images`;
 
 export const SETTINGS_FILENAME = 'settings.json';
+export const SYNC_RECORD_FILENAME = 'sync.json';
 
 export const SUPPORTED_BOOK_EXTS = [
   'epub',
@@ -64,15 +66,20 @@ export const DEFAULT_KOSYNC_SETTINGS = {
   enabled: false,
 } as KOSyncSettings;
 
+export const DEFAULT_WEBDAV_SETTINGS = {
+  enabled: false,
+  url: '',
+  username: '',
+  password: '',
+  baseFolder: 'Readest',
+} as WebDAVSyncSettings;
+
 export const DEFAULT_SYSTEM_SETTINGS: Partial<SystemSettings> = {
-  keepLogin: false,
-  autoUpload: true,
+  syncMode: 'off',
   alwaysOnTop: false,
   openBookInNewWindow: true,
   alwaysShowStatusBar: false,
   alwaysInForeground: false,
-  autoCheckUpdates: true,
-  screenWakeLock: false,
   screenBrightness: -1, // -1~100, -1 for system default
   autoScreenBrightness: true,
   openLastBooks: false,
@@ -93,6 +100,7 @@ export const DEFAULT_SYSTEM_SETTINGS: Partial<SystemSettings> = {
   metadataDescriptionCollapsed: false,
 
   kosync: DEFAULT_KOSYNC_SETTINGS,
+  webdav: DEFAULT_WEBDAV_SETTINGS,
   aiSettings: DEFAULT_AI_SETTINGS,
 
   lastSyncedAtBooks: 0,

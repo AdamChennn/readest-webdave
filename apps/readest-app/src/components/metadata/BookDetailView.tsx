@@ -1,8 +1,6 @@
 import clsx from 'clsx';
 import React from 'react';
 import {
-  MdOutlineCloudDownload,
-  MdOutlineCloudUpload,
   MdOutlineDelete,
   MdOutlineEdit,
   MdSaveAlt,
@@ -34,10 +32,6 @@ interface BookDetailViewProps {
   fileSize: number | null;
   onEdit?: () => void;
   onDelete?: () => void;
-  onDeleteCloudBackup?: () => void;
-  onDeleteLocalCopy?: () => void;
-  onDownload?: () => void;
-  onUpload?: () => void;
   onExport?: () => void;
 }
 
@@ -47,10 +41,6 @@ const BookDetailView: React.FC<BookDetailViewProps> = ({
   fileSize,
   onEdit,
   onDelete,
-  onDeleteCloudBackup,
-  onDeleteLocalCopy,
-  onDownload,
-  onUpload,
   onExport,
 }) => {
   const _ = useTranslation();
@@ -114,35 +104,11 @@ const BookDetailView: React.FC<BookDetailViewProps> = ({
                   <MenuItem
                     noIcon
                     transient
-                    label={_('Remove from Cloud & Device')}
+                    label={_('Remove from Device')}
                     onClick={onDelete}
-                  />
-                  <MenuItem
-                    noIcon
-                    transient
-                    label={_('Remove from Cloud Only')}
-                    onClick={onDeleteCloudBackup}
-                    disabled={!book.uploadedAt}
-                  />
-                  <MenuItem
-                    noIcon
-                    transient
-                    label={_('Remove from Device Only')}
-                    onClick={onDeleteLocalCopy}
-                    disabled={!book.downloadedAt}
                   />
                 </div>
               </Dropdown>
-            )}
-            {book.uploadedAt && onDownload && (
-              <button onClick={onDownload} title={_('Download from Cloud')}>
-                <MdOutlineCloudDownload className='fill-base-content' />
-              </button>
-            )}
-            {book.downloadedAt && onUpload && (
-              <button onClick={onUpload} title={_('Upload to Cloud')}>
-                <MdOutlineCloudUpload className='fill-base-content' />
-              </button>
             )}
             {book.downloadedAt && onExport && (
               <button onClick={onExport} title={_('Export Book')}>

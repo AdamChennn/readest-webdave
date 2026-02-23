@@ -53,6 +53,7 @@ import {
   DEFAULT_TRANSLATOR_CONFIG,
   DEFAULT_FIXED_LAYOUT_VIEW_SETTINGS,
   SETTINGS_FILENAME,
+  SYNC_RECORD_FILENAME,
   DEFAULT_MOBILE_SYSTEM_SETTINGS,
   DEFAULT_ANNOTATOR_CONFIG,
   DEFAULT_EINK_VIEW_SETTINGS,
@@ -117,6 +118,20 @@ export abstract class BaseAppService implements AppService {
   isOnlineCatalogsAccessible = true;
 
   protected CURRENT_MIGRATION_VERSION = 20251124;
+
+  private async updateSyncRecord(rawKey: string, operation: 'save' | 'update' | 'delete' = 'update') {
+    try {
+      const content = (await this.fs.readFile(SYNC_RECORD_FILENAME, 'Settings', 'text')) as string;
+      const records =
+        content && typeof content === 'string' && content.trim().length > 0
+          ? (JSON.parse(content) as Record<string, { operation: string; time: number }>)
+          : {};
+      records[rawKey] = { operation, time: Date.now() };
+      await this.fs.writeFile(SYNC_RECORD_FILENAME, 'Settings', JSON.stringify(records));
+    } catch {
+      // ignore sync record write errors in storage layer
+    }
+  }
 
   protected abstract fs: FileSystem;
   protected abstract resolvePath(fp: string, base: BaseDir): ResolvedPath;
@@ -286,6 +301,7 @@ export abstract class BaseAppService implements AppService {
 
   async saveSettings(settings: SystemSettings): Promise<void> {
     await this.safeSaveJSON(SETTINGS_FILENAME, 'Settings', settings);
+    await this.updateSyncRecord('config.readerConfig.settings.all', 'update');
   }
 
   async importFont(file?: string | File): Promise<CustomFontInfo | null> {
@@ -812,6 +828,7 @@ export abstract class BaseAppService implements AppService {
       serializedConfig = JSON.stringify(config);
     }
     await this.fs.writeFile(getConfigFilename(book), 'Books', serializedConfig);
+    await this.updateSyncRecord(`config.objectConfig.bookConfig.${book.hash}`, 'update');
   }
 
   async generateCoverImageUrl(book: Book): Promise<string> {
@@ -845,6 +862,7 @@ export abstract class BaseAppService implements AppService {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const libraryBooks = books.map(({ coverImageUrl, ...rest }) => rest);
     await this.safeSaveJSON(getLibraryFilename(), 'Books', libraryBooks);
+    await this.updateSyncRecord('database.sqlite.books.__all__', 'update');
   }
 
   private imageToArrayBuffer(imageUrl?: string, imageFile?: string): Promise<ArrayBuffer> {
@@ -932,12 +950,13 @@ export abstract class BaseAppService implements AppService {
         await this.fs.writeFile(filename, base, backupData);
         console.log(`Restored ${filename} from backup`);
       } catch (error) {
-        console.error(`Failed to restore ${filename} from backup:`, error);
+        console.warn(`Failed to restore ${filename} from backup:`, error);
       }
       return backupResult.data as T;
     }
 
-    console.error(`Both ${filename} and ${backupFilename} failed to load`);
+    // First launch commonly has no settings/library files yet; treat this as expected fallback.
+    console.warn(`Both ${filename} and ${backupFilename} failed to load, using defaults.`);
     return defaultValue;
   }
 

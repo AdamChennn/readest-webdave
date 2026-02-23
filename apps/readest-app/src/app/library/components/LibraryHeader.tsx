@@ -6,6 +6,7 @@ import { PiPlus } from 'react-icons/pi';
 import { PiSelectionAll, PiSelectionAllFill } from 'react-icons/pi';
 import { PiDotsThreeCircle } from 'react-icons/pi';
 import { MdOutlineMenu } from 'react-icons/md';
+import { MdSync } from 'react-icons/md';
 import { IoMdCloseCircle } from 'react-icons/io';
 
 import { useEnv } from '@/context/EnvContext';
@@ -25,7 +26,7 @@ import ViewMenu from './ViewMenu';
 interface LibraryHeaderProps {
   isSelectMode: boolean;
   isSelectAll: boolean;
-  onPullLibrary: () => void;
+  onPullLibrary: (fullRefresh?: boolean, verbose?: boolean) => void | Promise<void>;
   onImportBooksFromFiles: () => void;
   onImportBooksFromDirectory?: () => void;
   onOpenCatalogManager: () => void;
@@ -53,6 +54,7 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
   const { currentBookshelf } = useLibraryStore();
   const { isTrafficLightVisible } = useTrafficLight();
   const [searchQuery, setSearchQuery] = useState(searchParams?.get('q') ?? '');
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
 
   const headerRef = useRef<HTMLDivElement>(null);
   const iconSize18 = useResponsiveSize(18);
@@ -80,6 +82,16 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
     const newQuery = e.target.value;
     setSearchQuery(newQuery);
     debouncedUpdateQueryParam(newQuery);
+  };
+
+  const handleManualSync = async () => {
+    if (isManualSyncing) return;
+    setIsManualSyncing(true);
+    try {
+      await Promise.resolve(onPullLibrary(true, true));
+    } finally {
+      setIsManualSyncing(false);
+    }
   };
 
   const windowButtonVisible = appService?.hasWindowBar && !isTrafficLightVisible;
@@ -164,6 +176,19 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
                 onOpenCatalogManager={onOpenCatalogManager}
               />
             </Dropdown>
+            <button
+              type='button'
+              onClick={handleManualSync}
+              aria-label={_('同步')}
+              title={_('同步')}
+              className='h-6'
+              disabled={isManualSyncing}
+            >
+              <MdSync
+                role='button'
+                className={clsx('text-base-content/60 h-5 w-5', isManualSyncing && 'animate-spin')}
+              />
+            </button>
             {isMobile ? null : (
               <button
                 onClick={onToggleSelectMode}
@@ -213,7 +238,7 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
               buttonClassName='btn btn-ghost h-8 min-h-8 w-8 p-0'
               toggleButton={<MdOutlineMenu role='none' size={iconSize18} />}
             >
-              <SettingsMenu onPullLibrary={onPullLibrary} />
+              <SettingsMenu />
             </Dropdown>
             {appService?.hasWindowBar && (
               <WindowButtons

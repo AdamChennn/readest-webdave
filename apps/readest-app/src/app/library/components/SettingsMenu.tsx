@@ -1,39 +1,34 @@
 import clsx from 'clsx';
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { PiUserCircle, PiUserCircleCheck, PiGear } from 'react-icons/pi';
+import { PiGear } from 'react-icons/pi';
 import { PiSun, PiMoon } from 'react-icons/pi';
 import { TbSunMoon } from 'react-icons/tb';
-import { MdCloudSync, MdSync, MdSyncProblem } from 'react-icons/md';
 
 import { invoke, PermissionState } from '@tauri-apps/api/core';
 import { isTauriAppPlatform, isWebAppPlatform } from '@/services/environment';
 import { DOWNLOAD_READEST_URL } from '@/services/constants';
-import { useAuth } from '@/context/AuthContext';
 import { useEnv } from '@/context/EnvContext';
 import { useThemeStore } from '@/store/themeStore';
-import { useQuotaStats } from '@/hooks/useQuotaStats';
-import { useLibraryStore } from '@/store/libraryStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useResponsiveSize } from '@/hooks/useResponsiveSize';
-import { useTransferQueue } from '@/hooks/useTransferQueue';
-import { navigateToLogin, navigateToProfile } from '@/utils/nav';
-import { tauriHandleSetAlwaysOnTop, tauriHandleToggleFullScreen } from '@/utils/window';
-import { optInTelemetry, optOutTelemetry } from '@/utils/telemetry';
-import { setAboutDialogVisible } from '@/components/AboutWindow';
+import { useFileSelector } from '@/hooks/useFileSelector';
+import { tauriHandleSetAlwaysOnTop } from '@/utils/window';
 import { setMigrateDataDirDialogVisible } from '@/app/library/components/MigrateDataWindow';
 import { requestStoragePermission } from '@/utils/permission';
 import { saveSysSettings } from '@/helpers/settings';
 import { selectDirectory } from '@/utils/bridge';
-import { formatLocaleDateTime } from '@/utils/book';
-import UserAvatar from '@/components/UserAvatar';
+import { eventDispatcher } from '@/utils/event';
+import WebDAVRecordSyncService from '@/services/sync/webdavRecordSyncService';
+import { SyncRecordService } from '@/services/sync/syncRecordService';
+import SyncService from '@/services/sync/syncService';
+import { useCustomFontStore } from '@/store/customFontStore';
+import { mountCustomFont } from '@/styles/fonts';
 import MenuItem from '@/components/MenuItem';
-import Quota from '@/components/Quota';
 import Menu from '@/components/Menu';
+import Dialog from '@/components/Dialog';
 
 interface SettingsMenuProps {
-  onPullLibrary: (fullRefresh?: boolean, verbose?: boolean) => void;
   setIsDropdownOpen?: (isOpen: boolean) => void;
 }
 
@@ -42,71 +37,51 @@ interface Permissions {
   manageStorage: PermissionState;
 }
 
-const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdownOpen }) => {
+const SettingsMenu: React.FC<SettingsMenuProps> = ({ setIsDropdownOpen }) => {
   const _ = useTranslation();
-  const router = useRouter();
   const { envConfig, appService } = useEnv();
-  const { user } = useAuth();
-  const { userProfilePlan, quotas } = useQuotaStats(true);
   const { themeMode, setThemeMode } = useThemeStore();
-  const { settings, setSettingsDialogOpen } = useSettingsStore();
-  const [isAutoUpload, setIsAutoUpload] = useState(settings.autoUpload);
-  const [isAutoCheckUpdates, setIsAutoCheckUpdates] = useState(settings.autoCheckUpdates);
+  const { settings, setSettings, saveSettings, setSettingsDialogOpen } = useSettingsStore();
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(settings.alwaysOnTop);
   const [isAlwaysShowStatusBar, setIsAlwaysShowStatusBar] = useState(settings.alwaysShowStatusBar);
-  const [isScreenWakeLock, setIsScreenWakeLock] = useState(settings.screenWakeLock);
   const [isOpenLastBooks, setIsOpenLastBooks] = useState(settings.openLastBooks);
   const [isAutoImportBooksOnOpen, setIsAutoImportBooksOnOpen] = useState(
     settings.autoImportBooksOnOpen,
   );
-  const [isTelemetryEnabled, setIsTelemetryEnabled] = useState(settings.telemetryEnabled);
   const [alwaysInForeground, setAlwaysInForeground] = useState(settings.alwaysInForeground);
   const [savedBookCoverForLockScreen, setSavedBookCoverForLockScreen] = useState(
     settings.savedBookCoverForLockScreen || '',
   );
+  const [isTestingWebDAV, setIsTestingWebDAV] = useState(false);
+  const [isSyncingWebDAV, setIsSyncingWebDAV] = useState(false);
+  const [isWebDAVDialogOpen, setIsWebDAVDialogOpen] = useState(false);
+  const [isSavingWebDAV, setIsSavingWebDAV] = useState(false);
+  const [isImportingFonts, setIsImportingFonts] = useState(false);
+  const [webdavDraft, setWebdavDraft] = useState({
+    url: '',
+    username: '',
+    password: '',
+    baseFolder: 'Readest',
+  });
   const iconSize = useResponsiveSize(16);
+  const isWebDAVReady =
+    settings.syncMode === 'webdav' &&
+    !!settings.webdav?.enabled &&
+    !!settings.webdav?.url &&
+    !!settings.webdav?.username &&
+    !!settings.webdav?.password;
 
-  const { isSyncing } = useLibraryStore();
-  const { stats, hasActiveTransfers, setIsTransferQueueOpen } = useTransferQueue();
-
-  const openTransferQueue = () => {
-    setIsTransferQueueOpen(true);
-    setIsDropdownOpen?.(false);
-  };
-
-  const showAboutReadest = () => {
-    setAboutDialogVisible(true);
-    setIsDropdownOpen?.(false);
-  };
+  const { selectFiles } = useFileSelector(appService, _);
+  const { addFont, loadFont, saveCustomFonts } = useCustomFontStore();
 
   const downloadReadest = () => {
     window.open(DOWNLOAD_READEST_URL, '_blank');
     setIsDropdownOpen?.(false);
   };
 
-  const handleUserLogin = () => {
-    navigateToLogin(router);
-    setIsDropdownOpen?.(false);
-  };
-
-  const handleUserProfile = () => {
-    navigateToProfile(router);
-    setIsDropdownOpen?.(false);
-  };
-
   const cycleThemeMode = () => {
     const nextMode = themeMode === 'auto' ? 'light' : themeMode === 'light' ? 'dark' : 'auto';
     setThemeMode(nextMode);
-  };
-
-  const handleReloadPage = () => {
-    window.location.reload();
-    setIsDropdownOpen?.(false);
-  };
-
-  const handleFullScreen = () => {
-    tauriHandleToggleFullScreen();
-    setIsDropdownOpen?.(false);
   };
 
   const toggleOpenInNewWindow = () => {
@@ -128,54 +103,16 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
     setIsAlwaysShowStatusBar(newValue);
   };
 
-  const toggleAutoUploadBooks = () => {
-    const newValue = !settings.autoUpload;
-    saveSysSettings(envConfig, 'autoUpload', newValue);
-    setIsAutoUpload(newValue);
-
-    if (newValue && !user) {
-      navigateToLogin(router);
-    }
-  };
-
   const toggleAutoImportBooksOnOpen = () => {
     const newValue = !settings.autoImportBooksOnOpen;
     saveSysSettings(envConfig, 'autoImportBooksOnOpen', newValue);
     setIsAutoImportBooksOnOpen(newValue);
   };
 
-  const toggleAutoCheckUpdates = () => {
-    const newValue = !settings.autoCheckUpdates;
-    saveSysSettings(envConfig, 'autoCheckUpdates', newValue);
-    setIsAutoCheckUpdates(newValue);
-  };
-
-  const toggleScreenWakeLock = () => {
-    const newValue = !settings.screenWakeLock;
-    saveSysSettings(envConfig, 'screenWakeLock', newValue);
-    setIsScreenWakeLock(newValue);
-  };
-
   const toggleOpenLastBooks = () => {
     const newValue = !settings.openLastBooks;
     saveSysSettings(envConfig, 'openLastBooks', newValue);
     setIsOpenLastBooks(newValue);
-  };
-
-  const toggleTelemetry = () => {
-    const newValue = !settings.telemetryEnabled;
-    saveSysSettings(envConfig, 'telemetryEnabled', newValue);
-    setIsTelemetryEnabled(newValue);
-    if (newValue) {
-      optInTelemetry();
-    } else {
-      optOutTelemetry();
-    }
-  };
-
-  const handleUpgrade = () => {
-    navigateToProfile(router);
-    setIsDropdownOpen?.(false);
   };
 
   const handleSetRootDir = () => {
@@ -186,6 +123,181 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
   const openSettingsDialog = () => {
     setIsDropdownOpen?.(false);
     setSettingsDialogOpen(true);
+  };
+
+  const handleImportFonts = async () => {
+    if (isImportingFonts) return;
+    setIsImportingFonts(true);
+    try {
+      const result = await selectFiles({ type: 'fonts', multiple: true });
+      if (result.error) {
+        eventDispatcher.dispatch('toast', {
+          type: 'error',
+          message: _('字体文件选择失败'),
+        });
+        return;
+      }
+      if (!result.files.length) return;
+
+      let imported = 0;
+      for (const selectedFile of result.files) {
+        const fontInfo = await appService?.importFont(selectedFile.path || selectedFile.file);
+        if (!fontInfo) continue;
+        const customFont = addFont(fontInfo.path, {
+          name: fontInfo.name,
+          family: fontInfo.family,
+          style: fontInfo.style,
+          weight: fontInfo.weight,
+          variable: fontInfo.variable,
+        });
+        const loadedFont = await loadFont(envConfig, customFont.id);
+        mountCustomFont(document, loadedFont);
+        imported++;
+      }
+      await saveCustomFonts(envConfig);
+      eventDispatcher.dispatch('toast', {
+        type: imported > 0 ? 'success' : 'info',
+        message: imported > 0 ? _('已导入 {{count}} 个字体', { count: imported }) : _('未导入字体'),
+      });
+    } catch (error) {
+      console.error('Import fonts failed:', error);
+      eventDispatcher.dispatch('toast', {
+        type: 'error',
+        message: _('导入字体失败'),
+      });
+    } finally {
+      setIsImportingFonts(false);
+    }
+  };
+
+  const handleTestWebDAVConnection = async () => {
+    if (!isWebDAVReady) {
+      eventDispatcher.dispatch('toast', {
+        type: 'info',
+        message: _('请先配置 WebDAV'),
+      });
+      return;
+    }
+    if (isTestingWebDAV) return;
+    setIsTestingWebDAV(true);
+    try {
+      const ok = await WebDAVRecordSyncService.testConnection(envConfig);
+      eventDispatcher.dispatch('toast', {
+        type: ok ? 'success' : 'error',
+        message: ok ? _('WebDAV 连接成功') : _('WebDAV 连接失败'),
+      });
+    } catch (error) {
+      console.error('Test WebDAV connection failed:', error);
+      eventDispatcher.dispatch('toast', {
+        type: 'error',
+        message: _('WebDAV 连接失败'),
+      });
+    } finally {
+      setIsTestingWebDAV(false);
+    }
+  };
+
+  const handleManualWebDAVSync = async () => {
+    if (!isWebDAVReady) {
+      eventDispatcher.dispatch('toast', {
+        type: 'info',
+        message: _('请先配置 WebDAV'),
+      });
+      return;
+    }
+    if (isSyncingWebDAV) return;
+    setIsSyncingWebDAV(true);
+    try {
+      const result = await WebDAVRecordSyncService.sync(envConfig, 'both');
+      if (!result.ok) throw new Error('webdav pull failed');
+      const now = Date.now();
+      saveSysSettings(envConfig, 'lastSyncedAtConfigs', now);
+      eventDispatcher.dispatch('toast', {
+        type: 'success',
+        message: _('WebDAV 双向同步完成'),
+      });
+    } catch (error) {
+      console.error('WebDAV bidirectional sync failed:', error);
+      eventDispatcher.dispatch('toast', {
+        type: 'error',
+        message: _('WebDAV 同步失败'),
+      });
+    } finally {
+      setIsSyncingWebDAV(false);
+    }
+  };
+
+  const handleConfigureWebDAV = () => {
+    const current = settings.webdav || {
+      enabled: false,
+      url: '',
+      username: '',
+      password: '',
+      baseFolder: 'Readest',
+    };
+    setWebdavDraft({
+      url: current.url || '',
+      username: current.username || '',
+      password: current.password || '',
+      baseFolder: current.baseFolder || 'Readest',
+    });
+    setIsWebDAVDialogOpen(true);
+  };
+
+  const handleSaveWebDAVConfig = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (isSavingWebDAV) return;
+    const url = webdavDraft.url.trim();
+    const username = webdavDraft.username.trim();
+    const password = webdavDraft.password;
+    const baseFolder = (webdavDraft.baseFolder.trim() || 'Readest').replace(/^\/+|\/+$/g, '');
+    if (!url || !username || !password) {
+      eventDispatcher.dispatch('toast', {
+        type: 'error',
+        message: _('WebDAV 地址、用户名和密码不能为空'),
+      });
+      return;
+    }
+    setIsSavingWebDAV(true);
+    const nextSettings = {
+      ...settings,
+      syncMode: 'webdav' as const,
+      webdav: {
+        enabled: true,
+        url,
+        username,
+        password,
+        baseFolder,
+      },
+    };
+    try {
+      setSettings(nextSettings);
+      await saveSettings(envConfig, nextSettings);
+      await SyncService.removeSyncUtil(envConfig);
+      await SyncRecordService.setSyncRecord(
+        envConfig,
+        { type: 'config', catergory: 'readerConfig', name: 'settings', key: 'syncMode' },
+        { operation: 'update', time: Date.now() },
+      );
+      await SyncRecordService.setSyncRecord(
+        envConfig,
+        { type: 'config', catergory: 'readerConfig', name: 'settings', key: 'webdav' },
+        { operation: 'update', time: Date.now() },
+      );
+      eventDispatcher.dispatch('toast', {
+        type: 'success',
+        message: _('WebDAV 配置已保存'),
+      });
+      setIsWebDAVDialogOpen(false);
+    } catch (error) {
+      console.error('Save WebDAV configuration failed:', error);
+      eventDispatcher.dispatch('toast', {
+        type: 'error',
+        message: _('保存 WebDAV 配置失败'),
+      });
+    } finally {
+      setIsSavingWebDAV(false);
+    }
   };
 
   const handleSetSavedBookCoverForLockScreen = async () => {
@@ -219,9 +331,6 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
     setAlwaysInForeground(requestAlwaysInForeground);
   };
 
-  const avatarUrl = user?.user_metadata?.['picture'] || user?.user_metadata?.['avatar_url'];
-  const userFullName = user?.user_metadata?.['full_name'];
-  const userDisplayName = userFullName ? userFullName.split(' ')[0] : null;
   const themeModeLabel =
     themeMode === 'dark'
       ? _('Dark Mode')
@@ -234,81 +343,14 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
   const savedBookCoverDescription = `💾 ${coverDir}/last-book-cover.png`;
 
   return (
-    <Menu
-      className={clsx(
-        'settings-menu dropdown-content no-triangle',
-        'z-20 mt-2 max-w-[90vw] shadow-2xl',
-      )}
-      onCancel={() => setIsDropdownOpen?.(false)}
-    >
-      {user ? (
-        <MenuItem
-          label={
-            userDisplayName
-              ? _('Logged in as {{userDisplayName}}', { userDisplayName })
-              : _('Logged in')
-          }
-          labelClass='!max-w-40'
-          aria-label={_('View account details and quota')}
-          Icon={
-            avatarUrl ? (
-              <UserAvatar url={avatarUrl} size={iconSize} DefaultIcon={PiUserCircleCheck} />
-            ) : (
-              PiUserCircleCheck
-            )
-          }
-        >
-          <ul className='ms-0 flex flex-col ps-0 before:hidden'>
-            <MenuItem
-              label={_('Cloud File Transfers')}
-              Icon={MdCloudSync}
-              description={
-                hasActiveTransfers
-                  ? _('{{activeCount}} active, {{pendingCount}} pending', {
-                      activeCount: stats.active,
-                      pendingCount: stats.pending,
-                    })
-                  : stats.failed > 0
-                    ? _('{{failedCount}} failed', { failedCount: stats.failed })
-                    : ''
-              }
-              onClick={openTransferQueue}
-            />
-            <MenuItem
-              label={
-                settings.lastSyncedAtBooks
-                  ? _('Synced at {{time}}', {
-                      time: formatLocaleDateTime(settings.lastSyncedAtBooks),
-                    })
-                  : _('Never synced')
-              }
-              Icon={user ? MdSync : MdSyncProblem}
-              labelClass='ps-2 pe-1 !mx-0'
-              iconClassName={user && isSyncing ? 'animate-reverse-spin' : ''}
-              onClick={onPullLibrary.bind(null, true, true)}
-            />
-            <button
-              onClick={handleUserProfile}
-              className='hover:bg-base-300 w-full rounded-md'
-              style={{
-                paddingInlineStart: `${iconSize}px`,
-              }}
-            >
-              <Quota quotas={quotas} labelClassName='h-10 pl-3 pr-2' />
-            </button>
-            <MenuItem label={_('Account')} onClick={handleUserProfile} />
-          </ul>
-        </MenuItem>
-      ) : (
-        <MenuItem label={_('Sign In')} Icon={PiUserCircle} onClick={handleUserLogin}></MenuItem>
-      )}
-
-      <MenuItem
-        label={_('Auto Upload Books to Cloud')}
-        toggled={isAutoUpload}
-        onClick={toggleAutoUploadBooks}
-      />
-
+    <>
+      <Menu
+        className={clsx(
+          'settings-menu dropdown-content no-triangle',
+          'z-20 mt-2 max-w-[90vw] shadow-2xl',
+        )}
+        onCancel={() => setIsDropdownOpen?.(false)}
+      >
       {isTauriAppPlatform() && !appService?.isMobile && (
         <MenuItem
           label={_('Auto Import on File Open')}
@@ -323,13 +365,6 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
           onClick={toggleOpenLastBooks}
         />
       )}
-      {appService?.hasUpdater && (
-        <MenuItem
-          label={_('Check Updates on Start')}
-          toggled={isAutoCheckUpdates}
-          onClick={toggleAutoCheckUpdates}
-        />
-      )}
       <hr aria-hidden='true' className='border-base-200 my-1' />
       {appService?.hasWindow && (
         <MenuItem
@@ -338,7 +373,6 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
           onClick={toggleOpenInNewWindow}
         />
       )}
-      {appService?.hasWindow && <MenuItem label={_('Fullscreen')} onClick={handleFullScreen} />}
       {appService?.hasWindow && (
         <MenuItem label={_('Always on Top')} toggled={isAlwaysOnTop} onClick={toggleAlwaysOnTop} />
       )}
@@ -349,11 +383,6 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
           onClick={toggleAlwaysShowStatusBar}
         />
       )}
-      <MenuItem
-        label={_('Keep Screen Awake')}
-        toggled={isScreenWakeLock}
-        onClick={toggleScreenWakeLock}
-      />
       {appService?.isAndroidApp && (
         <MenuItem
           label={_(_('Background Read Aloud'))}
@@ -361,13 +390,18 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
           onClick={toggleAlwaysInForeground}
         />
       )}
-      <MenuItem label={_('Reload Page')} onClick={handleReloadPage} />
+      <MenuItem
+        label={isImportingFonts ? _('正在导入字体...') : _('导入字体文件')}
+        onClick={handleImportFonts}
+        disabled={isImportingFonts}
+      />
       <MenuItem
         label={themeModeLabel}
         Icon={themeMode === 'dark' ? PiMoon : themeMode === 'light' ? PiSun : TbSunMoon}
         onClick={cycleThemeMode}
       />
       <MenuItem label={_('Settings')} Icon={PiGear} onClick={openSettingsDialog} />
+      <MenuItem label={_('WebDAV 同步')} onClick={handleConfigureWebDAV} />
       {appService?.canCustomizeRootDir && (
         <>
           <hr aria-hidden='true' className='border-base-200 my-1' />
@@ -396,19 +430,112 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
           </MenuItem>
         </>
       )}
-      <hr aria-hidden='true' className='border-base-200 my-1' />
-      {user && userProfilePlan === 'free' && (
-        <MenuItem label={_('Upgrade to Readest Premium')} onClick={handleUpgrade} />
-      )}
       {isWebAppPlatform() && <MenuItem label={_('Download Readest')} onClick={downloadReadest} />}
-      <MenuItem label={_('About Readest')} onClick={showAboutReadest} />
-      <MenuItem
-        label={_('Help improve Readest')}
-        description={isTelemetryEnabled ? _('Sharing anonymized statistics') : ''}
-        toggled={isTelemetryEnabled}
-        onClick={toggleTelemetry}
-      />
-    </Menu>
+      </Menu>
+      <Dialog
+        isOpen={isWebDAVDialogOpen}
+        title={_('WebDAV 同步')}
+        onClose={() => {
+          if (isSavingWebDAV) return;
+          setIsWebDAVDialogOpen(false);
+        }}
+        boxClassName='sm:min-w-[560px] sm:max-w-[560px] sm:h-auto sm:max-h-[90%]'
+        contentClassName='!px-4 !pb-4 !pt-2'
+      >
+        <form className='flex flex-col gap-3' onSubmit={handleSaveWebDAVConfig}>
+          <div className='form-control w-full'>
+            <label className='label' htmlFor='webdav-url'>
+              <span className='label-text'>{_('WebDAV 地址')}</span>
+            </label>
+            <input
+              id='webdav-url'
+              type='url'
+              className='input input-bordered w-full'
+              value={webdavDraft.url}
+              onChange={(e) => setWebdavDraft((prev) => ({ ...prev, url: e.target.value }))}
+              placeholder='https://dav.example.com/remote.php/dav/files/username'
+              required
+              disabled={isSavingWebDAV}
+            />
+          </div>
+          <div className='form-control w-full'>
+            <label className='label' htmlFor='webdav-username'>
+              <span className='label-text'>{_('用户名')}</span>
+            </label>
+            <input
+              id='webdav-username'
+              type='text'
+              className='input input-bordered w-full'
+              value={webdavDraft.username}
+              onChange={(e) => setWebdavDraft((prev) => ({ ...prev, username: e.target.value }))}
+              placeholder={_('用户名')}
+              autoComplete='username'
+              required
+              disabled={isSavingWebDAV}
+            />
+          </div>
+          <div className='form-control w-full'>
+            <label className='label' htmlFor='webdav-password'>
+              <span className='label-text'>{_('密码')}</span>
+            </label>
+            <input
+              id='webdav-password'
+              type='password'
+              className='input input-bordered w-full'
+              value={webdavDraft.password}
+              onChange={(e) => setWebdavDraft((prev) => ({ ...prev, password: e.target.value }))}
+              placeholder={_('密码')}
+              autoComplete='current-password'
+              required
+              disabled={isSavingWebDAV}
+            />
+          </div>
+          <div className='form-control w-full'>
+            <label className='label' htmlFor='webdav-folder'>
+              <span className='label-text'>{_('远端目录')}</span>
+            </label>
+            <input
+              id='webdav-folder'
+              type='text'
+              className='input input-bordered w-full'
+              value={webdavDraft.baseFolder}
+              onChange={(e) => setWebdavDraft((prev) => ({ ...prev, baseFolder: e.target.value }))}
+              placeholder='Readest'
+              disabled={isSavingWebDAV}
+            />
+          </div>
+          <div className='modal-action mt-1'>
+            <button
+              type='button'
+              className='btn'
+              onClick={() => setIsWebDAVDialogOpen(false)}
+              disabled={isSavingWebDAV}
+            >
+              {_('取消')}
+            </button>
+            <button
+              type='button'
+              className='btn'
+              onClick={handleTestWebDAVConnection}
+              disabled={isTestingWebDAV || isSavingWebDAV}
+            >
+              {isTestingWebDAV ? _('测试中...') : _('测试连接')}
+            </button>
+            <button
+              type='button'
+              className='btn'
+              onClick={handleManualWebDAVSync}
+              disabled={isSyncingWebDAV || isSavingWebDAV || !isWebDAVReady}
+            >
+              {isSyncingWebDAV ? _('同步中...') : _('立即同步')}
+            </button>
+            <button type='submit' className='btn btn-primary' disabled={isSavingWebDAV}>
+              {isSavingWebDAV ? _('保存中...') : _('保存配置')}
+            </button>
+          </div>
+        </form>
+      </Dialog>
+    </>
   );
 };
 

@@ -8,6 +8,7 @@ import type { NotebookTab } from '@/store/notebookStore';
 
 export type ThemeType = 'light' | 'dark' | 'auto';
 export type LibraryViewModeType = 'grid' | 'list';
+export type CloudSyncMode = 'off' | 'webdav';
 export const LibrarySortByType = {
   Title: 'title',
   Author: 'author',
@@ -64,17 +65,22 @@ export interface KOSyncSettings {
   strategy: KOSyncStrategy;
 }
 
+export interface WebDAVSyncSettings {
+  enabled: boolean;
+  url: string;
+  username: string;
+  password: string;
+  baseFolder: string;
+}
+
 export interface SystemSettings {
   version: number;
   localBooksDir: string;
   customRootDir?: string;
 
-  keepLogin: boolean;
-  autoUpload: boolean;
+  syncMode: CloudSyncMode;
   alwaysOnTop: boolean;
   openBookInNewWindow: boolean;
-  autoCheckUpdates: boolean;
-  screenWakeLock: boolean;
   screenBrightness: number;
   autoScreenBrightness: boolean;
   alwaysShowStatusBar: boolean;
@@ -101,6 +107,7 @@ export interface SystemSettings {
   metadataDescriptionCollapsed: boolean;
 
   kosync: KOSyncSettings;
+  webdav: WebDAVSyncSettings;
 
   lastSyncedAtBooks: number;
   lastSyncedAtConfigs: number;
