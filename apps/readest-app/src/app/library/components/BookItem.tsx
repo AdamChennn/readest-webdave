@@ -1,9 +1,8 @@
 import clsx from 'clsx';
 import { MdCheckCircle, MdCheckCircleOutline } from 'react-icons/md';
-import { LiaInfoCircleSolid } from 'react-icons/lia';
+import { PiDotsThreeOutlineVerticalFill } from 'react-icons/pi';
 
 import { Book } from '@/types/book';
-import { useEnv } from '@/context/EnvContext';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useResponsiveSize } from '@/hooks/useResponsiveSize';
 import { LibraryCoverFitType, LibraryViewModeType } from '@/types/settings';
@@ -35,7 +34,6 @@ const BookItem: React.FC<BookItemProps> = ({
   showBookDetailsModal,
 }) => {
   const _ = useTranslation();
-  const { appService } = useEnv();
   const iconSize15 = useResponsiveSize(15);
 
   return (
@@ -46,7 +44,7 @@ const BookItem: React.FC<BookItemProps> = ({
         mode === 'grid' && 'h-full flex-col justify-end',
         mode === 'list' && 'h-28 flex-row gap-4 overflow-hidden',
         mode === 'list' ? 'library-list-item' : 'library-grid-item',
-        appService?.hasContextMenu ? 'cursor-pointer' : '',
+        'cursor-pointer',
       )}
       onClick={(e) => e.stopPropagation()}
     >
@@ -118,20 +116,18 @@ const BookItem: React.FC<BookItemProps> = ({
         >
           {(book.progress || book.readingStatus) && <ReadingProgress book={book} />}
           <div className='flex items-center justify-center gap-x-2'>
-            {!appService?.isMobile && (
-              <button
-                aria-label={_('Show Book Details')}
-                className='show-detail-button -m-2 p-2 sm:opacity-0 sm:group-hover:opacity-100'
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => {
-                  showBookDetailsModal(book);
-                }}
-              >
-                <div className='pt-[2px] sm:pt-[1px]'>
-                  <LiaInfoCircleSolid size={iconSize15} />
-                </div>
-              </button>
-            )}
+            <button
+              aria-label={_('Show Book Details')}
+              className='show-detail-button -m-2 p-2'
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => {
+                showBookDetailsModal(book);
+              }}
+            >
+              <div className='pt-[2px] sm:pt-[1px]'>
+                <PiDotsThreeOutlineVerticalFill size={iconSize15} />
+              </div>
+            </button>
             {transferProgress !== null && transferProgress < 100 && (
               <div
                 className='radial-progress'
