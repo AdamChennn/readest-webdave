@@ -16,6 +16,7 @@ export interface SearchRequest {
   isbn?: string;
   author?: string;
   language?: string;
+  googleBooksApiKeys?: string;
 }
 
 export interface MetadataResult {

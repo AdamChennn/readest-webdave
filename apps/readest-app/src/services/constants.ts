@@ -16,7 +16,6 @@ import {
   ViewSettings,
 } from '@/types/book';
 import {
-  KOSyncSettings,
   WebDAVSyncSettings,
   LibraryGroupByType,
   LibrarySortByType,
@@ -55,17 +54,6 @@ export const BOOK_UNGROUPED_ID = '';
 export const SUPPORTED_IMAGE_EXTS = ['png', 'jpg', 'jpeg'];
 export const IMAGE_ACCEPT_FORMATS = SUPPORTED_IMAGE_EXTS.map((ext) => `.${ext}`).join(', ');
 
-export const DEFAULT_KOSYNC_SETTINGS = {
-  serverUrl: 'https://sync.koreader.rocks/', // https://kosync.ak-team.com:3042/
-  username: '',
-  userkey: '',
-  deviceId: '',
-  deviceName: '',
-  checksumMethod: 'binary',
-  strategy: 'prompt',
-  enabled: false,
-} as KOSyncSettings;
-
 export const DEFAULT_WEBDAV_SETTINGS = {
   enabled: false,
   url: '',
@@ -86,7 +74,6 @@ export const DEFAULT_SYSTEM_SETTINGS: Partial<SystemSettings> = {
   lastOpenBooks: [],
   autoImportBooksOnOpen: false,
   telemetryEnabled: true,
-  discordRichPresenceEnabled: false,
   libraryViewMode: 'grid',
   librarySortBy: LibrarySortByType.Updated,
   librarySortAscending: false,
@@ -98,8 +85,8 @@ export const DEFAULT_SYSTEM_SETTINGS: Partial<SystemSettings> = {
   metadataSeriesCollapsed: false,
   metadataOthersCollapsed: false,
   metadataDescriptionCollapsed: false,
+  googleBooksApiKeys: '',
 
-  kosync: DEFAULT_KOSYNC_SETTINGS,
   webdav: DEFAULT_WEBDAV_SETTINGS,
   aiSettings: DEFAULT_AI_SETTINGS,
 

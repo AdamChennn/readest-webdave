@@ -33,9 +33,6 @@ export const LibraryGroupByType = {
 
 export type LibraryGroupByType = (typeof LibraryGroupByType)[keyof typeof LibraryGroupByType];
 
-export type KOSyncChecksumMethod = 'binary' | 'filename';
-export type KOSyncStrategy = 'prompt' | 'silent' | 'send' | 'receive';
-
 export interface ReadSettings {
   sideBarWidth: string;
   isSideBarPinned: boolean;
@@ -52,17 +49,6 @@ export interface ReadSettings {
   userHighlightColors: string[];
   customTtsHighlightColors: string[];
   customThemes: CustomTheme[];
-}
-
-export interface KOSyncSettings {
-  enabled: boolean;
-  serverUrl: string;
-  username: string;
-  userkey: string;
-  deviceId: string;
-  deviceName: string;
-  checksumMethod: KOSyncChecksumMethod;
-  strategy: KOSyncStrategy;
 }
 
 export interface WebDAVSyncSettings {
@@ -91,7 +77,6 @@ export interface SystemSettings {
   savedBookCoverForLockScreen: string;
   savedBookCoverForLockScreenPath: string;
   telemetryEnabled: boolean;
-  discordRichPresenceEnabled: boolean;
   libraryViewMode: LibraryViewModeType;
   librarySortBy: LibrarySortByType;
   librarySortAscending: boolean;
@@ -105,8 +90,8 @@ export interface SystemSettings {
   metadataSeriesCollapsed: boolean;
   metadataOthersCollapsed: boolean;
   metadataDescriptionCollapsed: boolean;
+  googleBooksApiKeys: string;
 
-  kosync: KOSyncSettings;
   webdav: WebDAVSyncSettings;
 
   lastSyncedAtBooks: number;

@@ -15,7 +15,7 @@ function validateSearchRequest(body: SearchRequest): {
   error?: string;
   data?: SearchRequest;
 } {
-  const { title, isbn, author, language } = body;
+  const { title, isbn, author, language, googleBooksApiKeys } = body;
 
   if (
     (!title || typeof title !== 'string' || title.trim().length === 0) &&
@@ -38,6 +38,9 @@ function validateSearchRequest(body: SearchRequest): {
   if (author && typeof author !== 'string') {
     return { isValid: false, error: 'Author must be a string if provided' };
   }
+  if (googleBooksApiKeys && typeof googleBooksApiKeys !== 'string') {
+    return { isValid: false, error: 'Google Books API keys must be a string if provided' };
+  }
 
   if (isbn) {
     const cleanIsbn = isbn.replace(/[-\s]/g, '');
@@ -53,6 +56,7 @@ function validateSearchRequest(body: SearchRequest): {
       isbn: isbn?.trim(),
       author: author?.trim(),
       language: language?.trim(),
+      googleBooksApiKeys: googleBooksApiKeys?.trim(),
     },
   };
 }
@@ -72,15 +76,10 @@ function createResponse<T>(
   };
 }
 
-let metadataService: MetadataService;
-
-function getMetadataService(): MetadataService {
-  if (!metadataService) {
-    metadataService = new MetadataService({
-      googleBooksApiKeys: process.env['GOOGLE_BOOKS_API_KEYS'],
-    });
-  }
-  return metadataService;
+function createMetadataService(googleBooksApiKeys?: string): MetadataService {
+  return new MetadataService({
+    googleBooksApiKeys: googleBooksApiKeys || process.env['GOOGLE_BOOKS_API_KEYS'],
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -96,7 +95,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const service = getMetadataService();
+    const service = createMetadataService(validation.data?.googleBooksApiKeys);
     const result = await service.search(validation.data!);
     const responseTime = Date.now() - startTime;
 

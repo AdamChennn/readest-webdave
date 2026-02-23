@@ -12,8 +12,10 @@ import { searchMetadata } from '@/libs/metadata';
 import { formatAuthors, formatTitle, getPrimaryLanguage } from '@/utils/book';
 import { eventDispatcher } from '@/utils/event';
 import { stubTranslation as _ } from '@/utils/misc';
+import { useSettingsStore } from '@/store/settingsStore';
 
 export const useMetadataEdit = (metadata: BookMetadata | null) => {
+  const { settings } = useSettingsStore();
   const [editedMeta, setEditedMeta] = useState<BookMetadata>({} as BookMetadata);
   const [fieldSources, setFieldSources] = useState<Record<string, string>>({});
   const [lockedFields, setLockedFields] = useState<Record<string, boolean>>({});
@@ -175,6 +177,7 @@ export const useMetadataEdit = (metadata: BookMetadata | null) => {
         author: formatAuthors(editedMeta.author),
         isbn: isbnValidation.isValid ? editedMeta.identifier : undefined,
         language: getPrimaryLanguage(editedMeta.language),
+        googleBooksApiKeys: settings.googleBooksApiKeys?.trim() || undefined,
       });
       const metadataSources = results.map((result) => ({
         sourceName: result.providerName,

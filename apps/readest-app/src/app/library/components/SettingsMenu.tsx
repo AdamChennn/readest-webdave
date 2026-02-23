@@ -56,6 +56,8 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ setIsDropdownOpen }) => {
   const [isSyncingWebDAV, setIsSyncingWebDAV] = useState(false);
   const [isWebDAVDialogOpen, setIsWebDAVDialogOpen] = useState(false);
   const [isSavingWebDAV, setIsSavingWebDAV] = useState(false);
+  const [isScraperApiDialogOpen, setIsScraperApiDialogOpen] = useState(false);
+  const [isSavingScraperApi, setIsSavingScraperApi] = useState(false);
   const [isImportingFonts, setIsImportingFonts] = useState(false);
   const [webdavDraft, setWebdavDraft] = useState({
     url: '',
@@ -63,6 +65,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ setIsDropdownOpen }) => {
     password: '',
     baseFolder: 'Readest',
   });
+  const [googleBooksApiDraft, setGoogleBooksApiDraft] = useState('');
   const iconSize = useResponsiveSize(16);
   const isWebDAVReady =
     settings.syncMode === 'webdav' &&
@@ -244,6 +247,38 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ setIsDropdownOpen }) => {
     setIsWebDAVDialogOpen(true);
   };
 
+  const handleOpenScraperApiSettings = () => {
+    setGoogleBooksApiDraft(settings.googleBooksApiKeys || '');
+    setIsScraperApiDialogOpen(true);
+  };
+
+  const handleSaveScraperApiConfig = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (isSavingScraperApi) return;
+    setIsSavingScraperApi(true);
+    try {
+      const nextSettings = {
+        ...settings,
+        googleBooksApiKeys: googleBooksApiDraft.trim(),
+      };
+      setSettings(nextSettings);
+      await saveSettings(envConfig, nextSettings);
+      eventDispatcher.dispatch('toast', {
+        type: 'success',
+        message: _('刮削 API 配置已保存'),
+      });
+      setIsScraperApiDialogOpen(false);
+    } catch (error) {
+      console.error('Save scraper api settings failed:', error);
+      eventDispatcher.dispatch('toast', {
+        type: 'error',
+        message: _('保存刮削 API 配置失败'),
+      });
+    } finally {
+      setIsSavingScraperApi(false);
+    }
+  };
+
   const handleSaveWebDAVConfig = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isSavingWebDAV) return;
@@ -402,6 +437,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ setIsDropdownOpen }) => {
       />
       <MenuItem label={_('Settings')} Icon={PiGear} onClick={openSettingsDialog} />
       <MenuItem label={_('WebDAV 同步')} onClick={handleConfigureWebDAV} />
+      <MenuItem label={_('刮削 API 设置')} onClick={handleOpenScraperApiSettings} />
       {appService?.canCustomizeRootDir && (
         <>
           <hr aria-hidden='true' className='border-base-200 my-1' />
@@ -432,6 +468,50 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ setIsDropdownOpen }) => {
       )}
       {isWebAppPlatform() && <MenuItem label={_('Download Readest')} onClick={downloadReadest} />}
       </Menu>
+      <Dialog
+        isOpen={isScraperApiDialogOpen}
+        title={_('刮削 API 设置')}
+        onClose={() => {
+          if (isSavingScraperApi) return;
+          setIsScraperApiDialogOpen(false);
+        }}
+        boxClassName='sm:min-w-[560px] sm:max-w-[560px] sm:h-auto sm:max-h-[90%]'
+        contentClassName='!px-4 !pb-4 !pt-2'
+      >
+        <form className='flex flex-col gap-3' onSubmit={handleSaveScraperApiConfig}>
+          <div className='form-control w-full'>
+            <label className='label' htmlFor='google-books-api-key'>
+              <span className='label-text'>{_('Google Books API Key')}</span>
+            </label>
+            <input
+              id='google-books-api-key'
+              type='password'
+              className='input input-bordered w-full'
+              value={googleBooksApiDraft}
+              onChange={(e) => setGoogleBooksApiDraft(e.target.value)}
+              placeholder='AIza...'
+              autoComplete='off'
+              disabled={isSavingScraperApi}
+            />
+          </div>
+          <p className='text-base-content/70 text-xs'>
+            {_('可填写一个或多个 Key，多个请用英文逗号分隔。留空时将使用无 Key 模式。')}
+          </p>
+          <div className='modal-action mt-1'>
+            <button
+              type='button'
+              className='btn'
+              onClick={() => setIsScraperApiDialogOpen(false)}
+              disabled={isSavingScraperApi}
+            >
+              {_('取消')}
+            </button>
+            <button type='submit' className='btn btn-primary' disabled={isSavingScraperApi}>
+              {isSavingScraperApi ? _('保存中...') : _('保存配置')}
+            </button>
+          </div>
+        </form>
+      </Dialog>
       <Dialog
         isOpen={isWebDAVDialogOpen}
         title={_('WebDAV 同步')}
