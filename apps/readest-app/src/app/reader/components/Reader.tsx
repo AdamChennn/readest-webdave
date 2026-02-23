@@ -19,8 +19,6 @@ import { interceptWindowOpen } from '@/utils/open';
 import { mountAdditionalFonts } from '@/styles/fonts';
 import { isTauriAppPlatform } from '@/services/environment';
 import { getSysFontsList, setSystemUIVisibility } from '@/utils/bridge';
-import { KOSyncSettingsWindow } from './KOSyncSettings';
-import { ProofreadRulesManager } from './ProofreadRules';
 import { Toast } from '@/components/Toast';
 import { getLocale } from '@/utils/misc';
 import { initDayjs } from '@/utils/time';
@@ -32,7 +30,7 @@ Z-Index Layering Guide:
 99 – Window Border (Linux only)
      • Ensures the border stays on top of all UI elements.
 50 – Loading Progress / Toast Notifications / Dialogs / Popups
-     • Includes Settings, About, Updater, KOSync dialogs and Annotation popups.
+     • Includes Settings dialogs and Annotation popups.
 45 – Sidebar / Notebook (Unpinned)
      • Floats above the content but below global dialogs.
 40 – TTS Bar
@@ -159,9 +157,7 @@ const Reader: React.FC<{ ids?: string }> = ({ ids }) => {
       )}
     >
       <Suspense fallback={<div className='full-height'></div>}>
-        <ReaderContent ids={ids} settings={settings} />
-        <KOSyncSettingsWindow />
-        <ProofreadRulesManager />
+        <ReaderContent ids={ids} />
         <Toast />
       </Suspense>
     </div>

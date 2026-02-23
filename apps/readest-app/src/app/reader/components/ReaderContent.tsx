@@ -11,7 +11,6 @@ import { useReaderStore } from '@/store/readerStore';
 import { useSidebarStore } from '@/store/sidebarStore';
 import { useGamepad } from '@/hooks/useGamepad';
 import { useTranslation } from '@/hooks/useTranslation';
-import { SystemSettings } from '@/types/settings';
 import { parseOpenWithFiles } from '@/helpers/openWith';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { UnlistenFn } from '@tauri-apps/api/event';
@@ -32,19 +31,18 @@ import Notebook from './notebook/Notebook';
 import BooksGrid from './BooksGrid';
 import SettingsDialog from '@/components/settings/SettingsDialog';
 
-const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ ids, settings }) => {
+const ReaderContent: React.FC<{ ids?: string }> = ({ ids }) => {
   const _ = useTranslation();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { envConfig, appService } = useEnv();
   const { bookKeys, dismissBook, getNextBookKey } = useBooksManager();
   const { sideBarBookKey, setSideBarBookKey } = useSidebarStore();
-  const { saveSettings } = useSettingsStore();
+  const { setSettings, saveSettings } = useSettingsStore();
   const { getConfig, getBookData, saveConfig } = useBookDataStore();
   const { getView, setBookKeys, getViewSettings } = useReaderStore();
   const { initViewState, getViewState, clearViewState } = useReaderStore();
   const { isSettingsDialogOpen, settingsDialogBookKey } = useSettingsStore();
-  const [settingsDialogMounted, setSettingsDialogMounted] = useState(false);
   const [showDetailsBook, setShowDetailsBook] = useState<Book | null>(null);
   const isInitiating = useRef(false);
   const [loading, setLoading] = useState(false);
@@ -86,12 +84,6 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
   }, []);
 
   useEffect(() => {
-    if (isSettingsDialogOpen && !settingsDialogMounted) {
-      setSettingsDialogMounted(true);
-    }
-  }, [isSettingsDialogOpen, settingsDialogMounted]);
-
-  useEffect(() => {
     const handleShowBookDetails = (event: CustomEvent) => {
       setShowDetailsBook(event.detail as Book);
       return true;
@@ -105,11 +97,15 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
 
   useEffect(() => {
     if (bookKeys && bookKeys.length > 0) {
-      const settings = useSettingsStore.getState().settings;
+      const currentSettings = useSettingsStore.getState().settings;
       const lastOpenBooks = bookKeys.map((key) => key.split('-')[0]!);
-      if (settings.lastOpenBooks?.toString() !== lastOpenBooks.toString()) {
-        settings.lastOpenBooks = lastOpenBooks;
-        saveSettings(envConfig, settings);
+      if (currentSettings.lastOpenBooks?.toString() !== lastOpenBooks.toString()) {
+        const nextSettings = {
+          ...currentSettings,
+          lastOpenBooks,
+        };
+        setSettings(nextSettings);
+        saveSettings(envConfig, nextSettings);
       }
     }
 
@@ -160,7 +156,7 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
   };
 
   const saveSettingsAndGoToLibrary = () => {
-    saveSettings(envConfig, settings);
+    saveSettings(envConfig, useSettingsStore.getState().settings);
     navigateBackToLibrary();
   };
 
@@ -229,9 +225,7 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
         onCloseBook={handleCloseBook}
         onGoToLibrary={handleCloseBooksToLibrary}
       />
-      {settingsDialogMounted && (
-        <SettingsDialog bookKey={settingsDialogBookKey} isOpen={isSettingsDialogOpen} />
-      )}
+      {isSettingsDialogOpen && <SettingsDialog bookKey={settingsDialogBookKey} isOpen={isSettingsDialogOpen} />}
       <Notebook />
       {showDetailsBook && (
         <BookDetailModal

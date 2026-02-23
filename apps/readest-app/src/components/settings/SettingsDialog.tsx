@@ -204,25 +204,7 @@ const SettingsDialog: React.FC<{ bookKey: string; isOpen: boolean }> = ({ bookKe
     let rafId: number | null = null;
 
     const checkButtonWidths = () => {
-      const threshold = (container.clientWidth - 64) * 0.22;
-      const hideLabel = Array.from(container.querySelectorAll('button')).some((button) => {
-        const labelSpan = button.querySelector('span');
-        const labelText = labelSpan?.textContent || '';
-        const clone = button.cloneNode(true) as HTMLButtonElement;
-        clone.style.position = 'absolute';
-        clone.style.visibility = 'hidden';
-        clone.style.width = 'auto';
-        const cloneSpan = clone.querySelector('span');
-        if (cloneSpan) {
-          cloneSpan.classList.remove('hidden');
-          cloneSpan.textContent = labelText;
-        }
-        document.body.appendChild(clone);
-        const fullWidth = clone.scrollWidth;
-        document.body.removeChild(clone);
-        return fullWidth > threshold;
-      });
-      setShowAllTabLabels(!hideLabel);
+      setShowAllTabLabels(container.clientWidth >= 520);
     };
 
     const scheduleWidthCheck = () => {
@@ -356,38 +338,38 @@ const SettingsDialog: React.FC<{ bookKey: string; isOpen: boolean }> = ({ bookKe
         role='group'
         aria-label={`${_(currentPanel?.label || '')} - ${_('Settings')}`}
       >
-        {activePanel === 'Font' && (
+        {isOpen && activePanel === 'Font' && (
           <FontPanel
             bookKey={bookKey}
             onRegisterReset={(fn) => registerResetFunction('Font', fn)}
           />
         )}
-        {activePanel === 'Layout' && (
+        {isOpen && activePanel === 'Layout' && (
           <LayoutPanel
             bookKey={bookKey}
             onRegisterReset={(fn) => registerResetFunction('Layout', fn)}
           />
         )}
-        {activePanel === 'Color' && (
+        {isOpen && activePanel === 'Color' && (
           <ColorPanel
             bookKey={bookKey}
             onRegisterReset={(fn) => registerResetFunction('Color', fn)}
           />
         )}
-        {activePanel === 'Control' && (
+        {isOpen && activePanel === 'Control' && (
           <ControlPanel
             bookKey={bookKey}
             onRegisterReset={(fn) => registerResetFunction('Control', fn)}
           />
         )}
-        {activePanel === 'Language' && (
+        {isOpen && activePanel === 'Language' && (
           <LangPanel
             bookKey={bookKey}
             onRegisterReset={(fn) => registerResetFunction('Language', fn)}
           />
         )}
-        {activePanel === 'AI' && <AIPanel />}
-        {activePanel === 'Custom' && (
+        {isOpen && activePanel === 'AI' && <AIPanel />}
+        {isOpen && activePanel === 'Custom' && (
           <MiscPanel
             bookKey={bookKey}
             onRegisterReset={(fn) => registerResetFunction('Custom', fn)}

@@ -5,7 +5,7 @@ import { EnvConfigType } from '@/services/environment';
 import { initDayjs } from '@/utils/time';
 
 export type FontPanelView = 'main-fonts' | 'custom-fonts';
-const SETTINGS_SAVE_DEBOUNCE_MS = 300;
+const SETTINGS_SAVE_DEBOUNCE_MS = 600;
 
 let pendingSave:
   | {
@@ -15,6 +15,7 @@ let pendingSave:
   | null = null;
 let pendingSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingSaveResolvers: Array<{ resolve: () => void; reject: (error: unknown) => void }> = [];
+let lastSavedSnapshot: string | null = null;
 
 const flushPendingSave = async () => {
   if (!pendingSave) return;
@@ -25,8 +26,14 @@ const flushPendingSave = async () => {
   pendingSaveTimer = null;
 
   try {
+    const snapshot = JSON.stringify(settings);
+    if (snapshot === lastSavedSnapshot) {
+      resolvers.forEach((item) => item.resolve());
+      return;
+    }
     const appService = await envConfig.getAppService();
     await appService.saveSettings(settings);
+    lastSavedSnapshot = snapshot;
     resolvers.forEach((item) => item.resolve());
   } catch (error) {
     resolvers.forEach((item) => item.reject(error));
