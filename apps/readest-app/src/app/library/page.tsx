@@ -3,7 +3,7 @@
 import clsx from 'clsx';
 import * as React from 'react';
 import { MdChevronRight } from 'react-icons/md';
-import { useState, useRef, useEffect, Suspense, useCallback } from 'react';
+import { useState, useRef, useEffect, Suspense, useCallback, useMemo } from 'react';
 import { ReadonlyURLSearchParams, useRouter, useSearchParams } from 'next/navigation';
 import { OverlayScrollbarsComponent, OverlayScrollbarsComponentRef } from 'overlayscrollbars-react';
 import 'overlayscrollbars/overlayscrollbars.css';
@@ -637,10 +637,40 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
 
   const getGroupScope = (book: Book) => `${book.groupId || ''}::${book.groupName || ''}`;
 
+  const booksByScope = useMemo(() => {
+    const map = new Map<string, Book[]>();
+    for (const book of libraryBooks) {
+      if (book.deletedAt) continue;
+      const scope = getGroupScope(book);
+      const list = map.get(scope);
+      if (list) {
+        list.push(book);
+      } else {
+        map.set(scope, [book]);
+      }
+    }
+    return map;
+  }, [libraryBooks]);
+
+  const booksByScopedWorkKey = useMemo(() => {
+    const map = new Map<string, Book[]>();
+    for (const book of libraryBooks) {
+      if (book.deletedAt) continue;
+      const key = `${getGroupScope(book)}::${getBookWorkKey(book)}`;
+      const list = map.get(key);
+      if (list) {
+        list.push(book);
+      } else {
+        map.set(key, [book]);
+      }
+    }
+    return map;
+  }, [libraryBooks]);
+
   const handleMergeBookInto = (sourceBook: Book) => {
     const sourceScope = getGroupScope(sourceBook);
-    const candidates = libraryBooks.filter(
-      (book) => !book.deletedAt && book.hash !== sourceBook.hash && getGroupScope(book) === sourceScope,
+    const candidates = (booksByScope.get(sourceScope) || []).filter(
+      (book) => book.hash !== sourceBook.hash,
     );
     if (candidates.length === 0) {
       eventDispatcher.dispatch('toast', {
@@ -679,13 +709,9 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     const targetWorkKey = getBookWorkKey(targetBook);
     const mergeWorkKey = targetWorkKey;
     const now = Date.now();
-    const updates = libraryBooks
-      .filter((book) => !book.deletedAt)
-      .filter((book) => getGroupScope(book) === sourceScope)
-      .filter((book) => {
-        const key = getBookWorkKey(book);
-        return key === sourceWorkKey || key === targetWorkKey;
-      })
+    const sourceVariants = booksByScopedWorkKey.get(`${sourceScope}::${sourceWorkKey}`) || [];
+    const targetVariants = booksByScopedWorkKey.get(`${sourceScope}::${targetWorkKey}`) || [];
+    const updates = [...sourceVariants, ...targetVariants]
       .filter((book) => book.workKey !== mergeWorkKey)
       .map((book) => ({
         ...book,
@@ -703,24 +729,17 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     handleCancelMergeDialog();
   };
 
-  const mergeCandidates = mergeSourceBook
-    ? libraryBooks
-        .filter(
-          (book) =>
-            !book.deletedAt &&
-            book.hash !== mergeSourceBook.hash &&
-            getGroupScope(book) === getGroupScope(mergeSourceBook),
-        )
-        .sort((a, b) => b.updatedAt - a.updatedAt)
-    : [];
+  const mergeCandidates = useMemo(() => {
+    if (!mergeSourceBook) return [];
+    return (booksByScope.get(getGroupScope(mergeSourceBook)) || [])
+      .filter((book) => book.hash !== mergeSourceBook.hash)
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+  }, [mergeSourceBook, booksByScope]);
 
   const handleSetDefaultOpenFormat = (sourceBook: Book) => {
     const groupScope = getGroupScope(sourceBook);
     const workKey = getBookWorkKey(sourceBook);
-    const variants = libraryBooks
-      .filter((book) => !book.deletedAt)
-      .filter((book) => getGroupScope(book) === groupScope)
-      .filter((book) => getBookWorkKey(book) === workKey);
+    const variants = booksByScopedWorkKey.get(`${groupScope}::${workKey}`) || [];
     const formats = Array.from(new Set(variants.map((book) => book.format)));
     if (formats.length <= 1) {
       eventDispatcher.dispatch('toast', {
@@ -754,15 +773,15 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     handleCancelDefaultOpenFormatDialog();
   };
 
-  const defaultOpenFormatVariants = defaultOpenFormatBook
-    ? libraryBooks
-        .filter((book) => !book.deletedAt)
-        .filter((book) => getGroupScope(book) === getGroupScope(defaultOpenFormatBook))
-        .filter((book) => getBookWorkKey(book) === getBookWorkKey(defaultOpenFormatBook))
-        .sort((a, b) => a.format.localeCompare(b.format))
-    : [];
-  const defaultOpenFormatOptions = Array.from(
-    new Set(defaultOpenFormatVariants.map((book) => book.format)),
+  const defaultOpenFormatVariants = useMemo(() => {
+    if (!defaultOpenFormatBook) return [];
+    const key = `${getGroupScope(defaultOpenFormatBook)}::${getBookWorkKey(defaultOpenFormatBook)}`;
+    return [...(booksByScopedWorkKey.get(key) || [])].sort((a, b) => a.format.localeCompare(b.format));
+  }, [defaultOpenFormatBook, booksByScopedWorkKey]);
+
+  const defaultOpenFormatOptions = useMemo(
+    () => Array.from(new Set(defaultOpenFormatVariants.map((book) => book.format))),
+    [defaultOpenFormatVariants],
   );
 
   const handleNavigateToPath = (path: string | undefined) => {
