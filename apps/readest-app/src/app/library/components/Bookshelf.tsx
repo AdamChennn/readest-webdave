@@ -18,6 +18,7 @@ import { useLibraryStore } from '@/store/libraryStore';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useResponsiveSize } from '@/hooks/useResponsiveSize';
 import { navigateToLibrary, navigateToReader, showReaderWindow } from '@/utils/nav';
+import { getBookWorkKey } from '@/utils/book';
 import {
   createBookFilter,
   createBookGroups,
@@ -139,6 +140,36 @@ const Bookshelf: React.FC<BookshelfProps> = ({
     return queryTerm ? libraryBooks.filter((book) => bookFilter(book)) : libraryBooks;
   }, [libraryBooks, queryTerm]);
 
+  const mergedVisibleBooks = useMemo(() => {
+    const workMap = new Map<string, Book[]>();
+    const formatPreference = settings.defaultOpenFormatByWork || {};
+
+    for (const book of filteredBooks) {
+      if (book.deletedAt) continue;
+      const groupScope = `${book.groupId || ''}::${book.groupName || ''}`;
+      const workKey = getBookWorkKey(book);
+      const scopedWorkKey = `${groupScope}::${workKey}`;
+      if (!workMap.has(scopedWorkKey)) {
+        workMap.set(scopedWorkKey, []);
+      }
+      workMap.get(scopedWorkKey)!.push(book);
+    }
+
+    return Array.from(workMap.values()).map((variants) => {
+      const workKey = getBookWorkKey(variants[0]!);
+      const preferredFormat = formatPreference[workKey];
+      const preferred = preferredFormat ? variants.find((book) => book.format === preferredFormat) : null;
+      if (preferred) return preferred;
+
+      return [...variants].sort((a, b) => {
+        const aScore = (a.downloadedAt ? 1 : 0) + (a.uploadedAt ? 1 : 0);
+        const bScore = (b.downloadedAt ? 1 : 0) + (b.uploadedAt ? 1 : 0);
+        if (aScore !== bScore) return bScore - aScore;
+        return b.updatedAt - a.updatedAt;
+      })[0]!;
+    });
+  }, [filteredBooks, settings.defaultOpenFormatByWork]);
+
   const currentBookshelfItems = useMemo(() => {
     if (groupBy === LibraryGroupByType.Group) {
       // Use existing generateBookshelfItems for group mode
@@ -146,10 +177,10 @@ const Bookshelf: React.FC<BookshelfProps> = ({
       if (groupId && !groupName) {
         return [];
       }
-      return generateBookshelfItems(filteredBooks, groupName);
+      return generateBookshelfItems(mergedVisibleBooks, groupName);
     } else {
       // Use new createBookGroups for series/author/none modes
-      const allItems = createBookGroups(filteredBooks, groupBy);
+      const allItems = createBookGroups(mergedVisibleBooks, groupBy);
 
       // If navigating into a specific group, show only that group's books
       if (groupId) {
@@ -166,7 +197,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
 
       return allItems;
     }
-  }, [filteredBooks, groupBy, groupId, getGroupName]);
+  }, [mergedVisibleBooks, groupBy, groupId, getGroupName]);
 
   useEffect(() => {
     if (groupId && currentBookshelfItems.length === 0) {
@@ -264,11 +295,32 @@ const Bookshelf: React.FC<BookshelfProps> = ({
 
   const openSelectedBooks = () => {
     handleSetSelectMode(false);
+    const selectedIds = getSelectedBooks();
+    const selectedBookIds = selectedIds
+      .map((id) => {
+        const selectedBook = currentBookshelfItems.find(
+          (item): item is Book => 'format' in item && item.hash === id,
+        );
+        if (!selectedBook) return null;
+        const workKey = getBookWorkKey(selectedBook);
+        const preferredFormat = settings.defaultOpenFormatByWork?.[workKey];
+        const groupScope = `${selectedBook.groupId || ''}::${selectedBook.groupName || ''}`;
+        const variants = libraryBooks
+          .filter((book) => !book.deletedAt)
+          .filter((book) => `${book.groupId || ''}::${book.groupName || ''}` === groupScope)
+          .filter((book) => getBookWorkKey(book) === workKey);
+        const preferred = preferredFormat
+          ? variants.find((book) => book.format === preferredFormat)
+          : undefined;
+        return (preferred || selectedBook).hash;
+      })
+      .filter((id): id is string => !!id);
+    if (selectedBookIds.length === 0) return;
     if (appService?.hasWindow && settings.openBookInNewWindow) {
-      showReaderWindow(appService, getSelectedBooks());
+      showReaderWindow(appService, selectedBookIds);
     } else {
       setTimeout(() => setLoading(true), 200);
-      navigateToReader(router, getSelectedBooks());
+      navigateToReader(router, selectedBookIds);
     }
   };
 

@@ -1,10 +1,12 @@
 import clsx from 'clsx';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
-import { Book } from '@/types/book';
+import { Book, BookFormat } from '@/types/book';
 import { BookMetadata } from '@/libs/document';
 import { useEnv } from '@/context/EnvContext';
 import { useThemeStore } from '@/store/themeStore';
+import { useSettingsStore } from '@/store/settingsStore';
+import { useLibraryStore } from '@/store/libraryStore';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useMetadataEdit } from './useMetadataEdit';
 import { DeleteAction } from '@/types/system';
@@ -16,6 +18,8 @@ import BookDetailView from './BookDetailView';
 import BookDetailEdit from './BookDetailEdit';
 import SourceSelector from './SourceSelector';
 import Spinner from '../Spinner';
+import { getBookWorkKey } from '@/utils/book';
+import { saveSysSettings } from '@/helpers/settings';
 
 interface BookDetailModalProps {
   book: Book;
@@ -41,6 +45,8 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const _ = useTranslation();
   const { envConfig, appService } = useEnv();
   const { safeAreaInsets } = useThemeStore();
+  const { settings } = useSettingsStore();
+  const { library } = useLibraryStore();
   const [activeDeleteAction, setActiveDeleteAction] = useState<DeleteAction | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -161,6 +167,25 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
   };
 
   const currentDeleteConfig = activeDeleteAction ? deleteConfigs[activeDeleteAction] : null;
+  const groupScope = `${book.groupId || ''}::${book.groupName || ''}`;
+  const workKey = useMemo(() => getBookWorkKey(book), [book]);
+  const variants = useMemo(() => {
+    return library
+      .filter((item) => !item.deletedAt)
+      .filter((item) => `${item.groupId || ''}::${item.groupName || ''}` === groupScope)
+      .filter((item) => getBookWorkKey(item) === workKey)
+      .sort((a, b) => a.format.localeCompare(b.format));
+  }, [library, groupScope, workKey]);
+  const availableFormats = useMemo(() => Array.from(new Set(variants.map((item) => item.format))), [variants]);
+  const defaultOpenFormat = settings.defaultOpenFormatByWork?.[workKey] || availableFormats[0];
+
+  const handleDefaultOpenFormatChange = async (format: BookFormat) => {
+    const next = {
+      ...(settings.defaultOpenFormatByWork || {}),
+      [workKey]: format,
+    };
+    await saveSysSettings(envConfig, 'defaultOpenFormatByWork', next);
+  };
 
   return (
     <>
@@ -198,6 +223,9 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 book={book}
                 metadata={bookMeta}
                 fileSize={fileSize}
+                availableFormats={availableFormats}
+                defaultOpenFormat={defaultOpenFormat}
+                onDefaultOpenFormatChange={handleDefaultOpenFormatChange}
                 onEdit={handleBookMetadataUpdate ? handleEditMetadata : undefined}
                 onDelete={handleBookDelete ? handleDelete : undefined}
                 onExport={handleBookExport}

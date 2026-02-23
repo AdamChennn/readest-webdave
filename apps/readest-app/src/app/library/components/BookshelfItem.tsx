@@ -12,6 +12,7 @@ import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { eventDispatcher } from '@/utils/event';
 import { getOSPlatform } from '@/utils/misc';
 import { throttle } from '@/utils/throttle';
+import { getBookWorkKey } from '@/utils/book';
 import { LibraryCoverFitType, LibraryViewModeType } from '@/types/settings';
 import { BOOK_UNGROUPED_ID, BOOK_UNGROUPED_NAME } from '@/services/constants';
 import { FILE_REVEAL_LABELS, FILE_REVEAL_PLATFORMS } from '@/utils/os';
@@ -124,6 +125,7 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
   const { envConfig, appService } = useEnv();
   const { settings } = useSettingsStore();
   const { updateBook } = useLibraryStore();
+  const { library } = useLibraryStore();
 
   const showBookDetailsModal = useCallback(async (book: Book) => {
     handleShowDetailsBook(book);
@@ -156,22 +158,32 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
 
   const handleBookClick = useCallback(
     async (book: Book) => {
+      const workKey = getBookWorkKey(book);
+      const preferredFormat = settings.defaultOpenFormatByWork?.[workKey];
+      const groupScope = `${book.groupId || ''}::${book.groupName || ''}`;
+      const variants = library
+        .filter((item) => !item.deletedAt)
+        .filter((item) => `${item.groupId || ''}::${item.groupName || ''}` === groupScope)
+        .filter((item) => getBookWorkKey(item) === workKey);
+      const preferredBook =
+        (preferredFormat ? variants.find((item) => item.format === preferredFormat) : null) || book;
+
       if (isSelectMode) {
         toggleSelection(book.hash);
       } else {
-        const available = await makeBookAvailable(book);
+        const available = await makeBookAvailable(preferredBook);
         if (!available) return;
         if (appService?.hasWindow && settings.openBookInNewWindow) {
-          showReaderWindow(appService, [book.hash]);
+          showReaderWindow(appService, [preferredBook.hash]);
         } else {
           setTimeout(() => {
-            navigateToReader(router, [book.hash]);
+            navigateToReader(router, [preferredBook.hash]);
           }, 0);
         }
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isSelectMode, settings.openBookInNewWindow, appService],
+    [isSelectMode, settings.openBookInNewWindow, settings.defaultOpenFormatByWork, appService, library],
   );
 
   const handleGroupClick = useCallback(

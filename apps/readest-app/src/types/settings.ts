@@ -1,7 +1,7 @@
 import { CustomTheme } from '@/styles/themes';
 import { CustomFont } from '@/styles/fonts';
 import { CustomTexture } from '@/styles/textures';
-import { HighlightColor, HighlightStyle, ViewSettings } from './book';
+import { BookFormat, HighlightColor, HighlightStyle, ViewSettings } from './book';
 import { OPDSCatalog } from './opds';
 import type { AISettings } from '@/services/ai/types';
 import type { NotebookTab } from '@/store/notebookStore';
@@ -91,6 +91,7 @@ export interface SystemSettings {
   metadataOthersCollapsed: boolean;
   metadataDescriptionCollapsed: boolean;
   googleBooksApiKeys: string;
+  defaultOpenFormatByWork: Record<string, BookFormat>;
 
   webdav: WebDAVSyncSettings;
 

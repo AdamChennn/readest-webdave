@@ -86,6 +86,7 @@ export const DEFAULT_SYSTEM_SETTINGS: Partial<SystemSettings> = {
   metadataOthersCollapsed: false,
   metadataDescriptionCollapsed: false,
   googleBooksApiKeys: '',
+  defaultOpenFormatByWork: {},
 
   webdav: DEFAULT_WEBDAV_SETTINGS,
   aiSettings: DEFAULT_AI_SETTINGS,

@@ -318,3 +318,19 @@ export const getMetadataHash = (metadata: BookMetadata) => {
   }
   return;
 };
+
+export const getBookWorkKey = (book: Pick<Book, 'metaHash' | 'metadata' | 'title' | 'author'>) => {
+  const title = book.metadata ? getTitleForHash(book.metadata.title) : formatTitle(book.title);
+  const authors = book.metadata
+    ? getAuthorsList(book.metadata.author).join(',')
+    : getAuthorsList(book.author).join(',');
+  const normalizedTitle = title.trim().toLowerCase();
+  const normalizedAuthors = authors.trim().toLowerCase();
+  if (normalizedTitle || normalizedAuthors) {
+    return md5(`${normalizedTitle}|${normalizedAuthors}`.normalize('NFC'));
+  }
+  if (book.metaHash) {
+    return book.metaHash;
+  }
+  return md5(`${book.title}|${book.author}`.normalize('NFC'));
+};

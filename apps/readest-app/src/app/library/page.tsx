@@ -11,7 +11,14 @@ import 'overlayscrollbars/overlayscrollbars.css';
 import { Book } from '@/types/book';
 import { AppService, DeleteAction } from '@/types/system';
 import { navigateToLibrary, navigateToReader } from '@/utils/nav';
-import { formatAuthors, formatTitle, getPrimaryLanguage, listFormater } from '@/utils/book';
+import {
+  formatAuthors,
+  formatTitle,
+  getBookWorkKey,
+  getMetadataHash,
+  getPrimaryLanguage,
+  listFormater,
+} from '@/utils/book';
 import { eventDispatcher } from '@/utils/event';
 import { getDirPath, getFilename, joinPaths } from '@/utils/path';
 import { parseOpenWithFiles } from '@/helpers/openWith';
@@ -499,6 +506,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
 
   const handleUpdateMetadata = async (book: Book, metadata: BookMetadata) => {
     book.metadata = metadata;
+    book.metaHash = getMetadataHash(metadata) || getBookWorkKey(book);
     book.title = formatTitle(metadata.title);
     book.author = formatAuthors(metadata.author);
     book.primaryLanguage = getPrimaryLanguage(metadata.language);
