@@ -35,6 +35,8 @@ export interface Book {
   hash: string;
   // Metadata md5 hash, used to aggregate different versions of the same book
   metaHash?: string;
+  // Manual work key for explicitly merging different format files into one book
+  workKey?: string;
   format: BookFormat;
   title: string; // editable title from metadata
   sourceTitle?: string; // parsed when the book is imported and used to locate the file
@@ -261,27 +263,6 @@ export interface ScreenConfig {
   screenOrientation: 'auto' | 'portrait' | 'landscape';
 }
 
-export type ProofreadScope = 'selection' | 'book' | 'library';
-
-export interface ProofreadRule {
-  id: string;
-  scope: ProofreadScope;
-  pattern: string;
-  replacement: string;
-  cfi?: string;
-  sectionHref?: string;
-  enabled: boolean;
-  isRegex: boolean;
-  order: number; // Lower numbers apply first
-  wholeWord?: boolean; // Match whole words only (uses \b word boundaries)
-  caseSensitive?: boolean; // Case-sensitive matching (default true)
-  onlyForTTS?: boolean; // Only replace text for TTS, not in the book display (only for book/library scope)
-}
-
-export interface ProofreadRulesConfig {
-  proofreadRules?: ProofreadRule[];
-}
-
 export interface ViewSettings
   extends
     BookLayout,
@@ -292,7 +273,6 @@ export interface ViewSettings
     TTSConfig,
     TranslatorConfig,
     ScreenConfig,
-    ProofreadRulesConfig,
     AnnotatorConfig {
   paragraphMode?: ParagraphModeConfig;
 }

@@ -1,9 +1,7 @@
 import clsx from 'clsx';
 import { MdCheckCircle, MdCheckCircleOutline } from 'react-icons/md';
-import { PiDotsThreeOutlineFill } from 'react-icons/pi';
 
 import { Book } from '@/types/book';
-import { useTranslation } from '@/hooks/useTranslation';
 import { useResponsiveSize } from '@/hooks/useResponsiveSize';
 import { LibraryCoverFitType, LibraryViewModeType } from '@/types/settings';
 import { formatAuthors, formatDescription } from '@/utils/book';
@@ -19,7 +17,6 @@ interface BookItemProps {
   transferProgress: number | null;
   handleBookUpload: (book: Book) => void;
   handleBookDownload: (book: Book, options?: { redownload?: boolean; queued?: boolean }) => void;
-  showBookDetailsModal: (book: Book) => void;
 }
 
 const BookItem: React.FC<BookItemProps> = ({
@@ -31,9 +28,7 @@ const BookItem: React.FC<BookItemProps> = ({
   transferProgress,
   handleBookUpload: _handleBookUpload,
   handleBookDownload: _handleBookDownload,
-  showBookDetailsModal,
 }) => {
-  const _ = useTranslation();
   const iconSize15 = useResponsiveSize(15);
 
   return (
@@ -115,19 +110,7 @@ const BookItem: React.FC<BookItemProps> = ({
           }}
         >
           {(book.progress || book.readingStatus) && <ReadingProgress book={book} />}
-          <div className='flex items-center justify-center gap-x-2'>
-            <button
-              aria-label={_('Show Book Details')}
-              className='show-detail-button -m-2 p-2'
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => {
-                showBookDetailsModal(book);
-              }}
-            >
-              <div className='pt-[2px] sm:pt-[1px]'>
-                <PiDotsThreeOutlineFill size={iconSize15} />
-              </div>
-            </button>
+          <div className='flex items-center justify-center'>
             {transferProgress !== null && transferProgress < 100 && (
               <div
                 className='radial-progress'

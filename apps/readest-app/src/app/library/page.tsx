@@ -59,6 +59,7 @@ import {
   getBreadcrumbs,
 } from './utils/libraryUtils';
 import Spinner from '@/components/Spinner';
+import Dialog from '@/components/Dialog';
 import LibraryHeader from './components/LibraryHeader';
 import Bookshelf from './components/Bookshelf';
 import GroupHeader from './components/GroupHeader';
@@ -104,6 +105,8 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   const [isSelectAll, setIsSelectAll] = useState(false);
   const [isSelectNone, setIsSelectNone] = useState(false);
   const [showDetailsBook, setShowDetailsBook] = useState<Book | null>(null);
+  const [mergeSourceBook, setMergeSourceBook] = useState<Book | null>(null);
+  const [mergeTargetHash, setMergeTargetHash] = useState<string>('');
   const [currentGroupPath, setCurrentGroupPath] = useState<string | undefined>(undefined);
   const [currentSeriesAuthorGroup, setCurrentSeriesAuthorGroup] = useState<{
     groupBy: typeof LibraryGroupByType.Series | typeof LibraryGroupByType.Author;
@@ -629,6 +632,85 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     setShowDetailsBook(book);
   };
 
+  const getGroupScope = (book: Book) => `${book.groupId || ''}::${book.groupName || ''}`;
+
+  const handleMergeBookInto = (sourceBook: Book) => {
+    const sourceScope = getGroupScope(sourceBook);
+    const candidates = libraryBooks.filter(
+      (book) => !book.deletedAt && book.hash !== sourceBook.hash && getGroupScope(book) === sourceScope,
+    );
+    if (candidates.length === 0) {
+      eventDispatcher.dispatch('toast', {
+        type: 'warning',
+        message: _('No merge targets available in current group'),
+      });
+      return;
+    }
+    setMergeSourceBook(sourceBook);
+    setMergeTargetHash(candidates[0]!.hash);
+  };
+
+  const handleCancelMergeDialog = () => {
+    setMergeSourceBook(null);
+    setMergeTargetHash('');
+  };
+
+  const handleConfirmMergeInto = async () => {
+    if (!mergeSourceBook || !mergeTargetHash) return;
+    const sourceBook = libraryBooks.find((book) => book.hash === mergeSourceBook.hash && !book.deletedAt);
+    const targetBook = libraryBooks.find((book) => book.hash === mergeTargetHash && !book.deletedAt);
+    if (!sourceBook || !targetBook) {
+      handleCancelMergeDialog();
+      return;
+    }
+    const sourceScope = getGroupScope(sourceBook);
+    const targetScope = getGroupScope(targetBook);
+    if (sourceScope !== targetScope) {
+      eventDispatcher.dispatch('toast', {
+        type: 'error',
+        message: _('Books must be in the same group to merge'),
+      });
+      return;
+    }
+    const sourceWorkKey = getBookWorkKey(sourceBook);
+    const targetWorkKey = getBookWorkKey(targetBook);
+    const mergeWorkKey = targetWorkKey;
+    const now = Date.now();
+    const updates = libraryBooks
+      .filter((book) => !book.deletedAt)
+      .filter((book) => getGroupScope(book) === sourceScope)
+      .filter((book) => {
+        const key = getBookWorkKey(book);
+        return key === sourceWorkKey || key === targetWorkKey;
+      })
+      .filter((book) => book.workKey !== mergeWorkKey)
+      .map((book) => ({
+        ...book,
+        workKey: mergeWorkKey,
+        updatedAt: now,
+      }));
+    if (updates.length > 0) {
+      await updateBooks(envConfig, updates);
+      await pushLibrary();
+      eventDispatcher.dispatch('toast', {
+        type: 'info',
+        message: _('Books merged successfully'),
+      });
+    }
+    handleCancelMergeDialog();
+  };
+
+  const mergeCandidates = mergeSourceBook
+    ? libraryBooks
+        .filter(
+          (book) =>
+            !book.deletedAt &&
+            book.hash !== mergeSourceBook.hash &&
+            getGroupScope(book) === getGroupScope(mergeSourceBook),
+        )
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+    : [];
+
   const handleNavigateToPath = (path: string | undefined) => {
     const group = path ? getGroupId(path) : '';
     const params = new URLSearchParams(searchParams?.toString());
@@ -774,6 +856,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
                 handleBookDelete={handleBookDelete('both')}
                 handleSetSelectMode={handleSetSelectMode}
                 handleShowDetailsBook={handleShowDetailsBook}
+                handleMergeBookInto={handleMergeBookInto}
                 booksTransferProgress={{}}
                 handlePushLibrary={pushLibrary}
               />
@@ -807,6 +890,60 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           handleOpenBookFormat={handleOpenBookFormat}
           handleBookMetadataUpdate={handleUpdateMetadata}
         />
+      )}
+      {mergeSourceBook && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center'>
+          <Dialog
+            title={_('Merge Into...')}
+            isOpen={!!mergeSourceBook}
+            onClose={handleCancelMergeDialog}
+            boxClassName='sm:min-w-[520px] sm:max-w-[520px] sm:h-auto sm:max-h-[80%]'
+          >
+            <div className='flex flex-col gap-3 p-4'>
+              <p className='text-sm'>
+                {_('Choose a target book to merge with')}: {mergeSourceBook.title}
+              </p>
+              <div className='border-base-300 max-h-80 overflow-auto rounded border'>
+                {mergeCandidates.map((book) => (
+                  <label
+                    key={book.hash}
+                    aria-label={`${book.title} ${book.format}`}
+                    className='border-base-300 hover:bg-base-200 flex cursor-pointer items-center gap-3 border-b px-3 py-2 last:border-b-0'
+                  >
+                    <span className='sr-only'>
+                      {book.title} {book.format}
+                    </span>
+                    <input
+                      type='radio'
+                      className='radio radio-sm'
+                      name='merge-target-book'
+                      checked={mergeTargetHash === book.hash}
+                      onChange={() => setMergeTargetHash(book.hash)}
+                    />
+                    <div className='min-w-0 flex-1'>
+                      <div className='truncate text-sm font-medium'>{book.title}</div>
+                      <div className='text-neutral-content truncate text-xs'>
+                        {formatAuthors(book.author, book.primaryLanguage)} · {book.format}
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+              <div className='flex justify-end gap-2'>
+                <button className='btn btn-ghost' onClick={handleCancelMergeDialog}>
+                  {_('Cancel')}
+                </button>
+                <button
+                  className='btn btn-primary'
+                  onClick={handleConfirmMergeInto}
+                  disabled={!mergeTargetHash}
+                >
+                  {_('Merge')}
+                </button>
+              </div>
+            </div>
+          </Dialog>
+        </div>
       )}
       <MigrateDataWindow />
       {isSettingsDialogOpen && <SettingsDialog bookKey={''} />}

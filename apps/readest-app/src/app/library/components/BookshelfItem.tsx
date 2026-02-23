@@ -100,6 +100,7 @@ interface BookshelfItemProps {
   handleBookDelete: (book: Book, syncBooks?: boolean) => Promise<boolean>;
   handleSetSelectMode: (selectMode: boolean) => void;
   handleShowDetailsBook: (book: Book) => void;
+  handleMergeBookInto: (book: Book) => void;
   handleUpdateReadingStatus: (book: Book, status: ReadingStatus | undefined) => void;
 }
 
@@ -117,6 +118,7 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
   handleBookDownload,
   handleSetSelectMode,
   handleShowDetailsBook,
+  handleMergeBookInto,
   handleUpdateReadingStatus,
 }) => {
   const _ = useTranslation();
@@ -224,6 +226,12 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
         handleGroupBooks();
       },
     });
+    const mergeBookIntoMenuItem = await MenuItem.new({
+      text: _('Merge Into...'),
+      action: async () => {
+        handleMergeBookInto(book);
+      },
+    });
     const markAsFinishedMenuItem = await MenuItem.new({
       text: _('Mark as Finished'),
       action: async () => {
@@ -276,6 +284,7 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
     const menu = await Menu.new();
     menu.append(selectBookMenuItem);
     menu.append(groupBooksMenuItem);
+    menu.append(mergeBookIntoMenuItem);
     if (book.readingStatus === 'finished') {
       menu.append(markAsUnreadMenuItem);
     } else {
@@ -433,7 +442,6 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
               transferProgress={transferProgress}
               handleBookUpload={handleBookUpload}
               handleBookDownload={handleBookDownload}
-              showBookDetailsModal={showBookDetailsModal}
             />
           ) : (
             <GroupItem

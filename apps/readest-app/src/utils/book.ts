@@ -319,7 +319,12 @@ export const getMetadataHash = (metadata: BookMetadata) => {
   return;
 };
 
-export const getBookWorkKey = (book: Pick<Book, 'metaHash' | 'metadata' | 'title' | 'author'>) => {
+export const getBookWorkKey = (
+  book: Pick<Book, 'metaHash' | 'metadata' | 'title' | 'author' | 'workKey'>,
+) => {
+  if (book.workKey) {
+    return book.workKey;
+  }
   const title = book.metadata ? getTitleForHash(book.metadata.title) : formatTitle(book.title);
   const authors = book.metadata
     ? getAuthorsList(book.metadata.author).join(',')
