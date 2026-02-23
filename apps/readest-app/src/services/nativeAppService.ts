@@ -287,7 +287,17 @@ export const nativeFileSystem: FileSystem = {
       } as WriteFileOptions;
       return await writeFile(fp, content.stream(), writeOptions);
     } else {
-      return await writeFile(fp, new Uint8Array(content), baseDir ? { baseDir } : undefined);
+      const bytes = new Uint8Array(content);
+      if (bytes.byteLength > 1024 * 1024) {
+        // Stream large binary payloads to reduce JS thread stalls on Android.
+        const writeOptions = {
+          write: true,
+          create: true,
+          baseDir: baseDir ? baseDir : undefined,
+        } as WriteFileOptions;
+        return await writeFile(fp, new Blob([bytes]).stream(), writeOptions);
+      }
+      return await writeFile(fp, bytes, baseDir ? { baseDir } : undefined);
     }
   },
   async removeFile(path: string, base: BaseDir) {
