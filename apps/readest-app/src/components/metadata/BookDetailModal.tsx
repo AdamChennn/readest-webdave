@@ -35,6 +35,8 @@ interface DeleteConfig {
   handler?: (book: Book) => void;
 }
 
+const BOOK_DETAIL_CACHE = new Map<string, { metadata: BookMetadata | null; fileSize: number | null }>();
+
 const BookDetailModal: React.FC<BookDetailModalProps> = ({
   book,
   isOpen,
@@ -53,6 +55,15 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const [editMode, setEditMode] = useState(false);
   const [bookMeta, setBookMeta] = useState<BookMetadata | null>(null);
   const [fileSize, setFileSize] = useState<number | null>(null);
+  const detailBookHash = book.hash;
+  const detailBookDownloadedAt = book.downloadedAt;
+  const detailBookMetadata = book.metadata;
+  const detailBookUploadedAt = book.uploadedAt;
+  const detailBookFilePath = book.filePath;
+  const detailBookUrl = book.url;
+  const detailBookFormat = book.format;
+  const detailBookTitle = book.title;
+  const detailBookSourceTitle = book.sourceTitle;
 
   // Initialize metadata edit hook
   const {
@@ -92,22 +103,66 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
   };
 
   useEffect(() => {
-    const fetchBookDetails = async () => {
-      const appService = await envConfig.getAppService();
-      try {
-        let details = book.metadata || null;
-        if (!details && book.downloadedAt) {
-          details = await appService.fetchBookDetails(book);
-        }
-        setBookMeta(details);
-        const size = await appService.getBookFileSize(book);
-        setFileSize(size);
-      } finally {
+    if (!isOpen) return;
+    let cancelled = false;
+
+    const load = async () => {
+      const cached = BOOK_DETAIL_CACHE.get(detailBookHash);
+      if (cached) {
+        setBookMeta(cached.metadata);
+        setFileSize(cached.fileSize);
+        return;
       }
+
+      const appService = await envConfig.getAppService();
+      const detailBook: Book = {
+        hash: detailBookHash,
+        title: detailBookTitle,
+        sourceTitle: detailBookSourceTitle,
+        author: book.author,
+        format: detailBookFormat,
+        createdAt: book.createdAt,
+        updatedAt: book.updatedAt,
+        downloadedAt: detailBookDownloadedAt,
+        metadata: detailBookMetadata,
+        uploadedAt: detailBookUploadedAt,
+        filePath: detailBookFilePath,
+        url: detailBookUrl,
+      };
+      let details = detailBook.metadata || null;
+      if (!details && detailBook.downloadedAt) {
+        details = await appService.fetchBookDetails(detailBook);
+      }
+      const size = await appService.getBookFileSize(detailBook);
+
+      if (cancelled) return;
+      setBookMeta(details);
+      setFileSize(size);
+      BOOK_DETAIL_CACHE.set(detailBookHash, { metadata: details, fileSize: size });
     };
-    fetchBookDetails();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book]);
+
+    load().catch((error) => {
+      console.error('Failed to load book details:', error);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isOpen,
+    envConfig,
+    book.author,
+    book.createdAt,
+    book.updatedAt,
+    detailBookHash,
+    detailBookDownloadedAt,
+    detailBookMetadata,
+    detailBookUploadedAt,
+    detailBookFilePath,
+    detailBookUrl,
+    detailBookFormat,
+    detailBookTitle,
+    detailBookSourceTitle,
+  ]);
 
   const handleClose = () => {
     setBookMeta(null);

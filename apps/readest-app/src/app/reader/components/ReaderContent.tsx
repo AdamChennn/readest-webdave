@@ -21,7 +21,6 @@ import { uniqueId } from '@/utils/misc';
 import { throttle } from '@/utils/throttle';
 import { eventDispatcher } from '@/utils/event';
 import { navigateToLibrary } from '@/utils/nav';
-import { clearDiscordPresence } from '@/utils/discord';
 import { BOOK_IDS_SEPARATOR } from '@/services/constants';
 import { BookDetailModal } from '@/components/metadata';
 
@@ -45,6 +44,7 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
   const { getView, setBookKeys, getViewSettings } = useReaderStore();
   const { initViewState, getViewState, clearViewState } = useReaderStore();
   const { isSettingsDialogOpen, settingsDialogBookKey } = useSettingsStore();
+  const [settingsDialogMounted, setSettingsDialogMounted] = useState(false);
   const [showDetailsBook, setShowDetailsBook] = useState<Book | null>(null);
   const isInitiating = useRef(false);
   const [loading, setLoading] = useState(false);
@@ -84,6 +84,12 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (isSettingsDialogOpen && !settingsDialogMounted) {
+      setSettingsDialogMounted(true);
+    }
+  }, [isSettingsDialogOpen, settingsDialogMounted]);
 
   useEffect(() => {
     const handleShowBookDetails = (event: CustomEvent) => {
@@ -131,18 +137,12 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
     const { isPrimary } = getViewState(bookKey) || {};
     if (isPrimary && book && config) {
       const settings = useSettingsStore.getState().settings;
-      eventDispatcher.dispatch('flush-kosync', { bookKey });
       await saveConfig(envConfig, bookKey, config, settings);
     }
   };
 
   const saveConfigAndCloseBook = async (bookKey: string) => {
     console.log('Closing book', bookKey);
-
-    const viewState = getViewState(bookKey);
-    if (viewState?.isPrimary && appService?.isDesktopApp) {
-      await clearDiscordPresence(appService);
-    }
 
     try {
       getView(bookKey)?.close();
@@ -229,7 +229,9 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
         onCloseBook={handleCloseBook}
         onGoToLibrary={handleCloseBooksToLibrary}
       />
-      {isSettingsDialogOpen && <SettingsDialog bookKey={settingsDialogBookKey} />}
+      {settingsDialogMounted && (
+        <SettingsDialog bookKey={settingsDialogBookKey} isOpen={isSettingsDialogOpen} />
+      )}
       <Notebook />
       {showDetailsBook && (
         <BookDetailModal

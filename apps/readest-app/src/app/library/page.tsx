@@ -106,6 +106,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   const [isSelectAll, setIsSelectAll] = useState(false);
   const [isSelectNone, setIsSelectNone] = useState(false);
   const [showDetailsBook, setShowDetailsBook] = useState<Book | null>(null);
+  const [settingsDialogMounted, setSettingsDialogMounted] = useState(false);
   const [mergeSourceBook, setMergeSourceBook] = useState<Book | null>(null);
   const [mergeTargetHash, setMergeTargetHash] = useState<string>('');
   const [defaultOpenFormatBook, setDefaultOpenFormatBook] = useState<Book | null>(null);
@@ -635,6 +636,12 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     setShowDetailsBook(book);
   };
 
+  useEffect(() => {
+    if (isSettingsDialogOpen && !settingsDialogMounted) {
+      setSettingsDialogMounted(true);
+    }
+  }, [isSettingsDialogOpen, settingsDialogMounted]);
+
   const getGroupScope = (book: Book) => `${book.groupId || ''}::${book.groupName || ''}`;
 
   const booksByScope = useMemo(() => {
@@ -1065,7 +1072,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
         </div>
       )}
       <MigrateDataWindow />
-      {isSettingsDialogOpen && <SettingsDialog bookKey={''} />}
+      {settingsDialogMounted && <SettingsDialog bookKey={''} isOpen={isSettingsDialogOpen} />}
       {showCatalogManager && <CatalogDialog onClose={handleDismissOPDSDialog} />}
       <Toast />
     </div>

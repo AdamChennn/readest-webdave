@@ -46,7 +46,7 @@ type TabConfig = {
   disabled?: boolean;
 };
 
-const SettingsDialog: React.FC<{ bookKey: string }> = ({ bookKey }) => {
+const SettingsDialog: React.FC<{ bookKey: string; isOpen: boolean }> = ({ bookKey, isOpen }) => {
   const _ = useTranslation();
   const { appService } = useEnv();
   const closeIconSize = useResponsiveSize(16);
@@ -155,7 +155,7 @@ const SettingsDialog: React.FC<{ bookKey: string }> = ({ bookKey }) => {
 
   // handle activeSettingsItemId: switch to correct panel and scroll to item
   useEffect(() => {
-    if (!activeSettingsItemId) return;
+    if (!isOpen || !activeSettingsItemId) return;
 
     // parse panel from item id (format: settings.panel.itemName)
     const parts = activeSettingsItemId.split('.');
@@ -191,7 +191,7 @@ const SettingsDialog: React.FC<{ bookKey: string }> = ({ bookKey }) => {
     }, 100);
 
     return () => clearTimeout(timeoutId);
-  }, [activeSettingsItemId, activePanel, setActiveSettingsItemId]);
+  }, [isOpen, activeSettingsItemId, activePanel, setActiveSettingsItemId]);
 
   useEffect(() => {
     setFontPanelView('main-fonts');
@@ -275,7 +275,7 @@ const SettingsDialog: React.FC<{ bookKey: string }> = ({ bookKey }) => {
 
   return (
     <Dialog
-      isOpen={true}
+      isOpen={isOpen}
       onClose={handleClose}
       className='modal-open'
       bgClassName={bookKey ? 'sm:!bg-black/20' : 'sm:!bg-black/50'}
