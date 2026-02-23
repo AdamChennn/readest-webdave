@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { MdCheckCircle, MdCheckCircleOutline } from 'react-icons/md';
-import { PiDotsThreeOutlineVerticalFill } from 'react-icons/pi';
+import { PiDotsThreeOutlineFill } from 'react-icons/pi';
 
 import { Book } from '@/types/book';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -125,7 +125,7 @@ const BookItem: React.FC<BookItemProps> = ({
               }}
             >
               <div className='pt-[2px] sm:pt-[1px]'>
-                <PiDotsThreeOutlineVerticalFill size={iconSize15} />
+                <PiDotsThreeOutlineFill size={iconSize15} />
               </div>
             </button>
             {transferProgress !== null && transferProgress < 100 && (
