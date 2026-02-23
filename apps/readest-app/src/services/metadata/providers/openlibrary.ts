@@ -6,14 +6,14 @@ import { code6392to6391, normalizedLangCode } from '@/utils/lang';
 
 interface OpenLibraryBookSearch {
   title: string;
-  author_name?: { name: string }[];
-  publisher?: { name: string }[];
-  first_publish_year?: string;
+  author_name?: string[];
+  publisher?: string[];
+  first_publish_year?: string | number;
   language?: string[];
   isbn?: string[];
   cover_i?: number | string;
   subject?: string[];
-  description?: string[];
+  description?: string | { value?: string } | Array<string | { value?: string }>;
 }
 
 interface OpenLibraryBookID {
@@ -118,8 +118,8 @@ export class OpenLibraryProvider extends BaseMetadataProvider {
       published: book.publish_date,
       language: code6392to6391(book.languages?.[0]?.name || ''),
       identifier: isbn,
-      coverImage: book.cover?.large || book.cover?.medium || book.cover?.small,
-      subjects: book.subjects?.map((s: { name: string }) => s.name).slice(0, 5) || [],
+      coverImageUrl: book.cover?.large || book.cover?.medium || book.cover?.small,
+      subject: book.subjects?.map((s: { name: string }) => s.name).slice(0, 5) || [],
       description: this.extractDescription(book.description || ''),
     } as Metadata;
   }
@@ -135,22 +135,30 @@ export class OpenLibraryProvider extends BaseMetadataProvider {
       coverImageUrl: book.cover_i
         ? `https://covers.openlibrary.org/b/id/${book.cover_i}-L.jpg`
         : undefined,
-      subjects: book.subject?.slice(0, 5) || [],
-      description: book.description?.[0],
+      subject: book.subject?.slice(0, 5) || [],
+      description: this.extractDescription(book.description),
     } as Metadata;
   }
 
-  private extractDescription(description: string | { value: string }): string | undefined {
+  private extractDescription(
+    description:
+      | string
+      | { value?: string }
+      | Array<string | { value?: string }>
+      | undefined,
+  ): string | undefined {
     if (!description) return undefined;
+
+    if (Array.isArray(description)) {
+      const first = description[0];
+      if (typeof first === 'string') return first;
+      return first?.value;
+    }
 
     if (typeof description === 'string') {
       return description;
     }
 
-    if (description.value) {
-      return description.value;
-    }
-
-    return undefined;
+    return description.value;
   }
 }

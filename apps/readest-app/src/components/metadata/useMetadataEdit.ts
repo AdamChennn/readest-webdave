@@ -10,6 +10,8 @@ import {
 import { MetadataSource } from './SourceSelector';
 import { searchMetadata } from '@/libs/metadata';
 import { formatAuthors, formatTitle, getPrimaryLanguage } from '@/utils/book';
+import { eventDispatcher } from '@/utils/event';
+import { stubTranslation as _ } from '@/utils/misc';
 
 export const useMetadataEdit = (metadata: BookMetadata | null) => {
   const [editedMeta, setEditedMeta] = useState<BookMetadata>({} as BookMetadata);
@@ -180,10 +182,24 @@ export const useMetadataEdit = (metadata: BookMetadata | null) => {
         confidence: result.confidence,
         data: result.metadata as BookMetadata,
       }));
+      if (metadataSources.length === 0) {
+        eventDispatcher.dispatch('toast', {
+          type: 'warning',
+          message: _('No metadata source matched this book'),
+        });
+        return;
+      }
       setAvailableSources(metadataSources);
       setShowSourceSelection(true);
     } catch (error) {
       console.error('Failed to retrieve metadata:', error);
+      eventDispatcher.dispatch('toast', {
+        type: 'error',
+        message:
+          error instanceof Error
+            ? `${_('Failed to retrieve metadata')}: ${error.message}`
+            : _('Failed to retrieve metadata'),
+      });
     } finally {
       setSearchLoading(false);
     }

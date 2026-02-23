@@ -11,10 +11,7 @@ export class MetadataService {
 
   constructor(config: MetadataServiceConfig = {}) {
     this.providers.push(new OpenLibraryProvider());
-
-    if (config.googleBooksApiKeys) {
-      this.providers.push(new GoogleBooksProvider(config.googleBooksApiKeys));
-    }
+    this.providers.push(new GoogleBooksProvider(config.googleBooksApiKeys));
 
     if (config.providers) {
       this.providers.push(...config.providers);
