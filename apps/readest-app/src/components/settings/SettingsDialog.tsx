@@ -277,7 +277,7 @@ const SettingsDialog: React.FC<{ bookKey: string; isOpen: boolean }> = ({ bookKe
     <Dialog
       isOpen={isOpen}
       onClose={handleClose}
-      className='modal-open'
+      className={isOpen ? 'modal-open' : ''}
       bgClassName={bookKey ? 'sm:!bg-black/20' : 'sm:!bg-black/50'}
       boxClassName={clsx(
         'sm:min-w-[520px] overflow-hidden',
