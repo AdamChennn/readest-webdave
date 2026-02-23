@@ -19,6 +19,7 @@ import { requestStoragePermission } from '@/utils/permission';
 import { saveSysSettings } from '@/helpers/settings';
 import { selectDirectory } from '@/utils/bridge';
 import { eventDispatcher } from '@/utils/event';
+import { fetchWithTimeout } from '@/utils/fetch';
 import WebDAVRecordSyncService from '@/services/sync/webdavRecordSyncService';
 import { SyncRecordService } from '@/services/sync/syncRecordService';
 import SyncService from '@/services/sync/syncService';
@@ -58,6 +59,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ setIsDropdownOpen }) => {
   const [isSavingWebDAV, setIsSavingWebDAV] = useState(false);
   const [isScraperApiDialogOpen, setIsScraperApiDialogOpen] = useState(false);
   const [isSavingScraperApi, setIsSavingScraperApi] = useState(false);
+  const [isTestingScraperApi, setIsTestingScraperApi] = useState(false);
   const [isImportingFonts, setIsImportingFonts] = useState(false);
   const [webdavDraft, setWebdavDraft] = useState({
     url: '',
@@ -276,6 +278,48 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ setIsDropdownOpen }) => {
       });
     } finally {
       setIsSavingScraperApi(false);
+    }
+  };
+
+  const handleTestScraperApiConfig = async () => {
+    const apiKey = googleBooksApiDraft.trim();
+    if (!apiKey) {
+      eventDispatcher.dispatch('toast', {
+        type: 'info',
+        message: _('请先填写 Google Books API Key'),
+      });
+      return;
+    }
+    if (isTestingScraperApi) return;
+    setIsTestingScraperApi(true);
+    try {
+      const url = new URL('https://www.googleapis.com/books/v1/volumes');
+      url.searchParams.set('q', 'intitle:harry potter');
+      url.searchParams.set('maxResults', '1');
+      url.searchParams.set('printType', 'books');
+      url.searchParams.set('key', apiKey.split(',')[0]!.trim());
+
+      const response = await fetchWithTimeout(url.toString(), {}, 12000);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.error) {
+        const message = data?.error?.message || `HTTP ${response.status}`;
+        throw new Error(message);
+      }
+      eventDispatcher.dispatch('toast', {
+        type: 'success',
+        message: _('Google Books API 可用'),
+      });
+    } catch (error) {
+      console.error('Test Google Books API failed:', error);
+      eventDispatcher.dispatch('toast', {
+        type: 'error',
+        message:
+          error instanceof Error
+            ? `${_('Google Books API 不可用')}: ${error.message}`
+            : _('Google Books API 不可用'),
+      });
+    } finally {
+      setIsTestingScraperApi(false);
     }
   };
 
@@ -505,6 +549,14 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ setIsDropdownOpen }) => {
               disabled={isSavingScraperApi}
             >
               {_('取消')}
+            </button>
+            <button
+              type='button'
+              className='btn'
+              onClick={handleTestScraperApiConfig}
+              disabled={isSavingScraperApi || isTestingScraperApi}
+            >
+              {isTestingScraperApi ? _('测试中...') : _('测试连接')}
             </button>
             <button type='submit' className='btn btn-primary' disabled={isSavingScraperApi}>
               {isSavingScraperApi ? _('保存中...') : _('保存配置')}
