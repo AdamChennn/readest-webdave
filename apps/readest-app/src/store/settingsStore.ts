@@ -3,9 +3,51 @@ import { create } from 'zustand';
 import { SystemSettings } from '@/types/settings';
 import { EnvConfigType } from '@/services/environment';
 import { initDayjs } from '@/utils/time';
-import { SyncRecordService } from '@/services/sync/syncRecordService';
 
 export type FontPanelView = 'main-fonts' | 'custom-fonts';
+const SETTINGS_SAVE_DEBOUNCE_MS = 300;
+
+let pendingSave:
+  | {
+      envConfig: EnvConfigType;
+      settings: SystemSettings;
+    }
+  | null = null;
+let pendingSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingSaveResolvers: Array<{ resolve: () => void; reject: (error: unknown) => void }> = [];
+
+const flushPendingSave = async () => {
+  if (!pendingSave) return;
+  const { envConfig, settings } = pendingSave;
+  const resolvers = pendingSaveResolvers;
+  pendingSave = null;
+  pendingSaveResolvers = [];
+  pendingSaveTimer = null;
+
+  try {
+    const appService = await envConfig.getAppService();
+    await appService.saveSettings(settings);
+    resolvers.forEach((item) => item.resolve());
+  } catch (error) {
+    resolvers.forEach((item) => item.reject(error));
+  }
+};
+
+const scheduleSettingsSave = async (envConfig: EnvConfigType, settings: SystemSettings) => {
+  pendingSave = { envConfig, settings };
+  if (pendingSaveTimer) {
+    clearTimeout(pendingSaveTimer);
+  }
+
+  return await new Promise<void>((resolve, reject) => {
+    pendingSaveResolvers.push({ resolve, reject });
+    pendingSaveTimer = setTimeout(() => {
+      flushPendingSave().catch((error) => {
+        console.error('Failed to flush pending settings save:', error);
+      });
+    }, SETTINGS_SAVE_DEBOUNCE_MS);
+  });
+};
 
 interface SettingsState {
   settings: SystemSettings;
@@ -34,13 +76,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   activeSettingsItemId: null,
   setSettings: (settings) => set({ settings }),
   saveSettings: async (envConfig: EnvConfigType, settings: SystemSettings) => {
-    const appService = await envConfig.getAppService();
-    await appService.saveSettings(settings);
-    await SyncRecordService.setSyncRecord(
-      envConfig,
-      { type: 'config', catergory: 'readerConfig', name: 'settings', key: 'all' },
-      { operation: 'update', time: Date.now() },
-    );
+    await scheduleSettingsSave(envConfig, settings);
   },
   setSettingsDialogBookKey: (bookKey) => set({ settingsDialogBookKey: bookKey }),
   setSettingsDialogOpen: (open) => set({ isSettingsDialogOpen: open }),

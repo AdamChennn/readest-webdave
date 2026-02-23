@@ -5,7 +5,6 @@ import { useBookDataStore } from '@/store/bookDataStore';
 import { useReaderStore } from '@/store/readerStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { getStyles } from '@/utils/style';
-import { SyncRecordService } from '@/services/sync/syncRecordService';
 
 export const saveViewSettings = async <K extends keyof ViewSettings>(
   envConfig: EnvConfigType,
@@ -60,15 +59,5 @@ export const saveSysSettings = async <K extends keyof SystemSettings>(
     settings[key] = value;
     setSettings(settings);
     await saveSettings(envConfig, settings);
-    await SyncRecordService.setSyncRecord(
-      envConfig,
-      {
-        type: 'config',
-        catergory: 'readerConfig',
-        name: 'settings',
-        key: String(key),
-      },
-      { operation: 'update', time: Date.now() },
-    );
   }
 };
