@@ -23,6 +23,7 @@ import { fetchWithTimeout } from '@/utils/fetch';
 import WebDAVRecordSyncService from '@/services/sync/webdavRecordSyncService';
 import { SyncRecordService } from '@/services/sync/syncRecordService';
 import SyncService from '@/services/sync/syncService';
+import { isWebDAVUnavailableError } from '@/services/sync/errors';
 import { useCustomFontStore } from '@/store/customFontStore';
 import { mountCustomFont } from '@/styles/fonts';
 import MenuItem from '@/components/MenuItem';
@@ -225,7 +226,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ setIsDropdownOpen }) => {
       console.error('WebDAV bidirectional sync failed:', error);
       eventDispatcher.dispatch('toast', {
         type: 'error',
-        message: _('WebDAV 同步失败'),
+        message: isWebDAVUnavailableError(error) ? _('WebDAV 同步不可用') : _('WebDAV 同步失败'),
       });
     } finally {
       setIsSyncingWebDAV(false);

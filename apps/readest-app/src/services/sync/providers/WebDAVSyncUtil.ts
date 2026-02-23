@@ -3,6 +3,7 @@ import { isTauriAppPlatform } from '@/services/environment';
 import { WebDAVSyncSettings } from '@/types/settings';
 import { SyncUtilLike } from '../types';
 import { SyncTaskQueue } from '../SyncTaskQueue';
+import { WebDAVUnavailableError } from '../errors';
 
 const textEncoder = new TextEncoder();
 
@@ -74,7 +75,9 @@ export class WebDAVSyncUtil implements SyncUtilLike {
       } catch (error) {
         if (attempts >= retries) {
           this.queue.fail();
-          throw error;
+          throw new WebDAVUnavailableError(
+            error instanceof Error ? error.message : 'WebDAV sync unavailable',
+          );
         }
         attempts++;
         const delay = 1000 * Math.pow(2, attempts);

@@ -1,4 +1,5 @@
 import { SyncTaskQueueLike, SyncTaskStats } from './types';
+import { WebDAVUnavailableError } from './errors';
 
 export class SyncTaskQueue implements SyncTaskQueueLike {
   private queue: Array<() => void> = [];
@@ -17,7 +18,7 @@ export class SyncTaskQueue implements SyncTaskQueueLike {
     this.totalTasks++;
     return await new Promise<T>((resolve, reject) => {
       if (this.hasFailedTasks) {
-        reject(new Error('Task queue is in failed state'));
+        reject(new WebDAVUnavailableError());
         return;
       }
 

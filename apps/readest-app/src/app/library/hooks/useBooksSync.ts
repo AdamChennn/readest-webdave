@@ -7,6 +7,7 @@ import { SYNC_BOOKS_INTERVAL_SEC } from '@/services/constants';
 import { throttle } from '@/utils/throttle';
 import { eventDispatcher } from '@/utils/event';
 import WebDAVRecordSyncService from '@/services/sync/webdavRecordSyncService';
+import { isWebDAVUnavailableError } from '@/services/sync/errors';
 
 export const useBooksSync = () => {
   const _ = useTranslation();
@@ -15,6 +16,18 @@ export const useBooksSync = () => {
   const { libraryLoaded, library } = useLibraryStore();
   const isWebDAVSyncEnabled = settings.syncMode === 'webdav' && !!settings.webdav?.enabled;
   const isPullingRef = useRef(false);
+  const lastUnavailableToastAtRef = useRef(0);
+
+  const notifyUnavailable = useCallback(() => {
+    const now = Date.now();
+    // Avoid spamming the same toast during periodic auto-sync retries.
+    if (now - lastUnavailableToastAtRef.current < 15000) return;
+    lastUnavailableToastAtRef.current = now;
+    eventDispatcher.dispatch('toast', {
+      type: 'error',
+      message: _('WebDAV 同步不可用'),
+    });
+  }, [_]);
 
   const pullLibrary = useCallback(
     async (_fullRefresh = false, verbose = false) => {
@@ -29,11 +42,17 @@ export const useBooksSync = () => {
             message: result.ok ? _('WebDAV 双向同步完成') : _('WebDAV 同步失败'),
           });
         }
+      } catch (error) {
+        if (isWebDAVUnavailableError(error)) {
+          notifyUnavailable();
+          return;
+        }
+        throw error;
       } finally {
         isPullingRef.current = false;
       }
     },
-    [_, envConfig, isWebDAVSyncEnabled],
+    [_, envConfig, isWebDAVSyncEnabled, notifyUnavailable],
   );
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -42,13 +61,17 @@ export const useBooksSync = () => {
       () => {
         if (!isWebDAVSyncEnabled) return;
         WebDAVRecordSyncService.sync(envConfig, 'push').catch((error) => {
+          if (isWebDAVUnavailableError(error)) {
+            notifyUnavailable();
+            return;
+          }
           console.error('Auto WebDAV sync failed:', error);
         });
       },
       SYNC_BOOKS_INTERVAL_SEC * 1000,
       { emitLast: true },
     ),
-    [envConfig, isWebDAVSyncEnabled],
+    [envConfig, isWebDAVSyncEnabled, notifyUnavailable],
   );
 
   useEffect(() => {
