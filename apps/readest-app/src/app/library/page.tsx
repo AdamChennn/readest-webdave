@@ -45,6 +45,7 @@ import { requestStoragePermission } from '@/utils/permission';
 import { SUPPORTED_BOOK_EXTS } from '@/services/constants';
 import { tauriHandleClose, tauriHandleSetAlwaysOnTop, tauriQuitApp } from '@/utils/window';
 import { saveSysSettings } from '@/helpers/settings';
+import SyncConfigService from '@/services/sync/syncConfigService';
 
 import { LibraryGroupByType } from '@/types/settings';
 import { BookMetadata } from '@/libs/document';
@@ -478,10 +479,51 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   );
 
   const handleBookDownload = useCallback(
-    async () => {
-      return false;
+    async (book: Book, options?: { redownload?: boolean; queued?: boolean }) => {
+      if (!appService) return false;
+      const isWebDAVEnabled = settings.syncMode === 'webdav' && !!settings.webdav?.enabled;
+      if (!isWebDAVEnabled) {
+        if (options?.queued) {
+          eventDispatcher.dispatch('toast', {
+            message: _('请先配置 WebDAV'),
+            type: 'info',
+          });
+        }
+        return false;
+      }
+
+      try {
+        const downloaded = await SyncConfigService.downloadBookAssets(envConfig, book.hash, {
+          force: !!options?.redownload,
+        });
+        if (!downloaded) {
+          eventDispatcher.dispatch('toast', {
+            message: _('下载书籍失败'),
+            type: 'error',
+          });
+          return false;
+        }
+
+        const refreshedLibrary = await appService.loadLibraryBooks();
+        setLibrary(refreshedLibrary);
+
+        if (options?.queued) {
+          eventDispatcher.dispatch('toast', {
+            message: _('书籍下载完成'),
+            type: 'success',
+          });
+        }
+        return true;
+      } catch (error) {
+        console.error('Failed to download book via WebDAV:', error);
+        eventDispatcher.dispatch('toast', {
+          message: _('下载书籍失败'),
+          type: 'error',
+        });
+        return false;
+      }
     },
-    [],
+    [_, appService, envConfig, setLibrary, settings.syncMode, settings.webdav?.enabled],
   );
 
   const handleBookDelete = (_deleteAction: DeleteAction) => {

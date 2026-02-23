@@ -189,7 +189,11 @@ class SyncConfigService {
     return uploaded;
   }
 
-  static async downloadBookAssets(envConfig: EnvConfigType, bookHash: string): Promise<boolean> {
+  static async downloadBookAssets(
+    envConfig: EnvConfigType,
+    bookHash: string,
+    options?: { force?: boolean },
+  ): Promise<boolean> {
     const util = await SyncService.getSyncUtil(envConfig);
     if (!util) return false;
 
@@ -200,13 +204,23 @@ class SyncConfigService {
       await appService.createDir(book.hash, 'Books');
     }
 
-    const bookContent = await util.downloadFile(getBookContentRemoteFilename(book), BOOK_FILE_TYPE);
-    if (!bookContent) return false;
-    await appService.writeFile(getLocalBookFilename(book), 'Books', bookContent as ArrayBuffer);
+    const force = !!options?.force;
+    const localBookPath = getLocalBookFilename(book);
+    const localCoverPath = getCoverFilename(book);
 
-    const coverContent = await util.downloadFile(getBookCoverRemoteFilename(book.hash), BOOK_FILE_TYPE);
-    if (coverContent) {
-      await appService.writeFile(getCoverFilename(book), 'Books', coverContent as ArrayBuffer);
+    const needBook = force || !(await appService.exists(localBookPath, 'Books'));
+    if (needBook) {
+      const bookContent = await util.downloadFile(getBookContentRemoteFilename(book), BOOK_FILE_TYPE);
+      if (!bookContent) return false;
+      await appService.writeFile(localBookPath, 'Books', bookContent as ArrayBuffer);
+    }
+
+    const needCover = force || !(await appService.exists(localCoverPath, 'Books'));
+    if (needCover) {
+      const coverContent = await util.downloadFile(getBookCoverRemoteFilename(book.hash), BOOK_FILE_TYPE);
+      if (coverContent) {
+        await appService.writeFile(localCoverPath, 'Books', coverContent as ArrayBuffer);
+      }
     }
 
     return true;

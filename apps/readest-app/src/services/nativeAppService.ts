@@ -262,9 +262,12 @@ export const nativeFileSystem: FileSystem = {
   async readFile(path: string, base: BaseDir, mode: 'text' | 'binary') {
     const { fp, baseDir } = this.resolvePath(path, base);
 
-    return mode === 'text'
-      ? (readTextFile(fp, baseDir ? { baseDir } : undefined) as Promise<string>)
-      : ((await readFile(fp, baseDir ? { baseDir } : undefined)).buffer as ArrayBuffer);
+    if (mode === 'text') {
+      return readTextFile(fp, baseDir ? { baseDir } : undefined) as Promise<string>;
+    }
+    const bytes = await readFile(fp, baseDir ? { baseDir } : undefined);
+    // Ensure we return only the meaningful byte range, not the whole backing buffer.
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   },
   async writeFile(path: string, base: BaseDir, content: string | ArrayBuffer | File) {
     // NOTE: this could be very slow for large files and might block the UI thread

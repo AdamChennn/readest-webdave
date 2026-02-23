@@ -5,6 +5,7 @@ import SyncConfigService from './syncConfigService';
 import SyncService from './syncService';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { getCoverFilename, getLocalBookFilename } from '@/utils/book';
 
 type SyncDirection = 'push' | 'pull';
 
@@ -179,7 +180,7 @@ export class WebDAVRecordSyncService {
           if (parsed.key !== '__all__') {
             if (record.operation === 'delete') {
               plan.deleteBookFilesLocal.add(parsed.key);
-            } else if (record.operation === 'save') {
+            } else if (record.operation === 'save' || record.operation === 'update') {
               plan.pullBookFiles.add(parsed.key);
             }
           }
@@ -229,7 +230,37 @@ export class WebDAVRecordSyncService {
     return plan;
   }
 
-  private static async applyPlan(envConfig: EnvConfigType, plan: SyncPlan): Promise<void> {
+  private static async reconcileMissingLocalBookAssets(
+    envConfig: EnvConfigType,
+    remoteRecords: SyncRecordMap,
+    plan: SyncPlan,
+  ): Promise<void> {
+    const appService = await envConfig.getAppService();
+    const books = await appService.loadLibraryBooks();
+    for (const book of books) {
+      if (book.deletedAt) continue;
+      const syncKey = `database.sqlite.books.${book.hash}`;
+      const remoteRecord = remoteRecords[syncKey];
+      if (!remoteRecord || remoteRecord.operation === 'delete') continue;
+
+      const hasBookFile = await appService.exists(getLocalBookFilename(book), 'Books');
+      const hasCoverFile = await appService.exists(getCoverFilename(book), 'Books');
+      if (!hasBookFile || !hasCoverFile) {
+        plan.pullBookFiles.add(book.hash);
+      }
+    }
+  }
+
+  private static async applyPlan(
+    envConfig: EnvConfigType,
+    plan: SyncPlan,
+    remoteRecords: SyncRecordMap,
+    reconcileMissingLocalAssets = false,
+  ): Promise<void> {
+    if (reconcileMissingLocalAssets) {
+      await this.reconcileMissingLocalBookAssets(envConfig, remoteRecords, plan);
+    }
+
     if (plan.pushSettings) {
       await SyncConfigService.uploadSettings(envConfig);
     }
@@ -277,6 +308,12 @@ export class WebDAVRecordSyncService {
         await appService.deleteFile(localPath, 'Books');
       }
     }
+
+    if (plan.pullBookFiles.size > 0 || plan.deleteBookFilesLocal.size > 0) {
+      const appService = await envConfig.getAppService();
+      const books = await appService.loadLibraryBooks();
+      useLibraryStore.getState().setLibrary(books);
+    }
   }
 
   static async sync(envConfig: EnvConfigType, direction: SyncDirection | 'both' = 'both') {
@@ -290,7 +327,7 @@ export class WebDAVRecordSyncService {
     const remoteRecords = parseSyncRecordContent(remoteSyncRaw);
 
     const plan = this.collectPlan(localRecords, remoteRecords, direction);
-    await this.applyPlan(envConfig, plan);
+    await this.applyPlan(envConfig, plan, remoteRecords, direction !== 'push');
 
     const merged = mergeRecordMaps(localRecords, remoteRecords);
     await SyncRecordService.setAllSyncRecords(envConfig, merged);

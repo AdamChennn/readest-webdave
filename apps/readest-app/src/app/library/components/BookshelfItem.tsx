@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { navigateToLibrary, navigateToReader, showReaderWindow } from '@/utils/nav';
 import { useEnv } from '@/context/EnvContext';
@@ -9,6 +9,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { useLongPress } from '@/hooks/useLongPress';
 import { Menu, MenuItem } from '@tauri-apps/api/menu';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
+import { PiDotsThreeCircle } from 'react-icons/pi';
 import { eventDispatcher } from '@/utils/event';
 import { getOSPlatform } from '@/utils/misc';
 import { throttle } from '@/utils/throttle';
@@ -18,6 +19,9 @@ import { BOOK_UNGROUPED_ID, BOOK_UNGROUPED_NAME } from '@/services/constants';
 import { FILE_REVEAL_LABELS, FILE_REVEAL_PLATFORMS } from '@/utils/os';
 import { Book, BooksGroup, ReadingStatus } from '@/types/book';
 import { md5Fingerprint } from '@/utils/md5';
+import ModalPortal from '@/components/ModalPortal';
+import ActionMenu from '@/components/Menu';
+import ActionItem from '@/components/MenuItem';
 import BookItem from './BookItem';
 import GroupItem from './GroupItem';
 
@@ -126,10 +130,10 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
   const _ = useTranslation();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { envConfig, appService } = useEnv();
+  const { appService } = useEnv();
   const { settings } = useSettingsStore();
-  const { updateBook } = useLibraryStore();
   const { library } = useLibraryStore();
+  const [mobileActionMenuOpen, setMobileActionMenuOpen] = useState(false);
 
   const showBookDetailsModal = useCallback(async (book: Book) => {
     handleShowDetailsBook(book);
@@ -137,27 +141,25 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
   }, []);
 
   const makeBookAvailable = async (book: Book) => {
-    if (book.uploadedAt && !book.downloadedAt) {
-      if (await appService?.isBookAvailable(book)) {
-        if (!book.downloadedAt || !book.coverDownloadedAt) {
-          book.downloadedAt = Date.now();
-          book.coverDownloadedAt = Date.now();
-          await updateBook(envConfig, book);
-        }
-        return true;
-      }
-      let available = false;
-      const loadingTimeout = setTimeout(() => setLoading(true), 200);
-      try {
-        available = await handleBookDownload(book, { queued: false });
-        await updateBook(envConfig, book);
-      } finally {
-        if (loadingTimeout) clearTimeout(loadingTimeout);
-        setLoading(false);
-        return available;
-      }
+    if (await appService?.isBookAvailable(book)) {
+      return true;
     }
-    return true;
+
+    const canWebDAVDownload = settings.syncMode === 'webdav' && !!settings.webdav?.enabled;
+    const canLegacyDownload = !!book.uploadedAt;
+    if (!canWebDAVDownload && !canLegacyDownload) {
+      return false;
+    }
+
+    let available = false;
+    const loadingTimeout = setTimeout(() => setLoading(true), 200);
+    try {
+      available = await handleBookDownload(book, { queued: false });
+    } finally {
+      if (loadingTimeout) clearTimeout(loadingTimeout);
+      setLoading(false);
+    }
+    return available;
   };
 
   const handleBookClick = useCallback(
@@ -347,6 +349,15 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
     menu.popup();
   };
 
+  const openMobileActionMenu = () => {
+    if (!appService?.isMobileApp) return;
+    setMobileActionMenuOpen(true);
+  };
+
+  const closeMobileActionMenu = () => {
+    setMobileActionMenuOpen(false);
+  };
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleSelectItem = useCallback(
     throttle(() => {
@@ -393,6 +404,10 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
   const { pressing, handlers } = useLongPress(
     {
       onLongPress: () => {
+        if (appService?.isMobileApp && !isSelectMode) {
+          openMobileActionMenu();
+          return;
+        }
         handleSelectItem();
       },
       onTap: () => {
@@ -402,7 +417,7 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
         if (appService?.hasContextMenu) {
           handleContextMenu();
         } else if (appService?.isAndroidApp) {
-          handleSelectItem();
+          openMobileActionMenu();
         }
       },
     },
@@ -424,7 +439,7 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
     <div className={clsx(mode === 'list' && 'sm:hover:bg-base-300/50 px-4 sm:px-6')}>
       <div
         className={clsx(
-          'visible-focus-inset-2 group',
+          'visible-focus-inset-2 group relative',
           mode === 'grid' &&
             'sm:hover:bg-base-300/50 flex h-full flex-col px-0 py-2 sm:px-4 sm:py-4',
           mode === 'list' && 'border-base-300 flex flex-col border-b py-2',
@@ -440,6 +455,23 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
         onKeyDown={handleKeyDown}
         {...handlers}
       >
+        {appService?.isMobileApp && 'format' in item && (
+          <button
+            className='bg-base-100/85 text-base-content absolute right-1 top-1 z-20 rounded-full p-0.5'
+            aria-label='Open actions'
+            onPointerDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              openMobileActionMenu();
+            }}
+          >
+            <PiDotsThreeCircle size={18} />
+          </button>
+        )}
         <div className='flex h-full flex-col justify-end'>
           {'format' in item ? (
             <BookItem
@@ -462,6 +494,136 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
           )}
         </div>
       </div>
+      {mobileActionMenuOpen && appService?.isMobileApp && (
+        <ModalPortal showOverlay>
+          <div className='absolute inset-0' onClick={closeMobileActionMenu} />
+          <div
+            className='bg-base-100 border-base-300 absolute bottom-0 left-0 right-0 z-[101] max-h-[70vh] rounded-t-2xl border p-2 shadow-2xl'
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ActionMenu className='no-triangle'>
+              {'format' in item ? (
+                <>
+                  <ActionItem
+                    label={itemSelected ? _('Deselect Book') : _('Select Book')}
+                    onClick={() => {
+                      closeMobileActionMenu();
+                      if (!isSelectMode) handleSetSelectMode(true);
+                      toggleSelection(item.hash);
+                    }}
+                  />
+                  <ActionItem
+                    label={_('Group Books')}
+                    onClick={() => {
+                      closeMobileActionMenu();
+                      if (!isSelectMode) handleSetSelectMode(true);
+                      if (!itemSelected) {
+                        toggleSelection(item.hash);
+                      }
+                      handleGroupBooks();
+                    }}
+                  />
+                  <ActionItem
+                    label='合并到...'
+                    onClick={() => {
+                      closeMobileActionMenu();
+                      handleMergeBookInto(item);
+                    }}
+                  />
+                  <ActionItem
+                    label='默认打开格式'
+                    onClick={() => {
+                      closeMobileActionMenu();
+                      handleSetDefaultOpenFormat(item);
+                    }}
+                  />
+                  <ActionItem
+                    label={item.readingStatus === 'finished' ? _('Mark as Unread') : _('Mark as Finished')}
+                    onClick={() => {
+                      closeMobileActionMenu();
+                      handleUpdateReadingStatus(
+                        item,
+                        item.readingStatus === 'finished' ? 'unread' : 'finished',
+                      );
+                    }}
+                  />
+                  {(item.readingStatus === 'finished' || item.readingStatus === 'unread') && (
+                    <ActionItem
+                      label={_('Clear Status')}
+                      onClick={() => {
+                        closeMobileActionMenu();
+                        handleUpdateReadingStatus(item, undefined);
+                      }}
+                    />
+                  )}
+                  <ActionItem
+                    label={_('Show Book Details')}
+                    onClick={() => {
+                      closeMobileActionMenu();
+                      showBookDetailsModal(item);
+                    }}
+                  />
+                  {item.uploadedAt && !item.downloadedAt && (
+                    <ActionItem
+                      label={_('Download Book')}
+                      onClick={() => {
+                        closeMobileActionMenu();
+                        handleBookDownload(item, { queued: true });
+                      }}
+                    />
+                  )}
+                  {!item.uploadedAt && item.downloadedAt && (
+                    <ActionItem
+                      label={_('Upload Book')}
+                      onClick={() => {
+                        closeMobileActionMenu();
+                        handleBookUpload(item);
+                      }}
+                    />
+                  )}
+                  <ActionItem
+                    label={_('Delete')}
+                    onClick={() => {
+                      closeMobileActionMenu();
+                      eventDispatcher.dispatch('delete-books', { ids: [item.hash] });
+                    }}
+                  />
+                </>
+              ) : (
+                <>
+                  <ActionItem
+                    label={itemSelected ? _('Deselect Group') : _('Select Group')}
+                    onClick={() => {
+                      closeMobileActionMenu();
+                      if (!isSelectMode) handleSetSelectMode(true);
+                      toggleSelection(item.id);
+                    }}
+                  />
+                  <ActionItem
+                    label={_('Group Books')}
+                    onClick={() => {
+                      closeMobileActionMenu();
+                      if (!isSelectMode) handleSetSelectMode(true);
+                      if (!itemSelected) {
+                        toggleSelection(item.id);
+                      }
+                      handleGroupBooks();
+                    }}
+                  />
+                  <ActionItem
+                    label={_('Delete')}
+                    onClick={() => {
+                      closeMobileActionMenu();
+                      eventDispatcher.dispatch('delete-books', { ids: [item.id] });
+                    }}
+                  />
+                </>
+              )}
+              <ActionItem label={_('Cancel')} onClick={closeMobileActionMenu} />
+            </ActionMenu>
+          </div>
+        </ModalPortal>
+      )}
     </div>
   );
 };
