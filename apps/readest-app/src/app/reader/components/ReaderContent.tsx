@@ -48,6 +48,7 @@ const ReaderContent: React.FC<{ ids?: string }> = ({ ids }) => {
   const [loading, setLoading] = useState(false);
   const [errorLoading, setErrorLoading] = useState(false);
   const hasScheduledFallback = useRef(false);
+  const hasScheduledEmptyFallback = useRef(false);
 
   useBookShortcuts({ sideBarBookKey, bookKeys });
   useGamepad();
@@ -211,6 +212,17 @@ const ReaderContent: React.FC<{ ids?: string }> = ({ ids }) => {
   const bookData = primaryBookKey ? getBookData(primaryBookKey) : undefined;
   const viewSettings = primaryBookKey ? getViewSettings(primaryBookKey) : undefined;
   useEffect(() => {
+    if (!bookKeys || bookKeys.length === 0) {
+      if (!hasScheduledEmptyFallback.current) {
+        hasScheduledEmptyFallback.current = true;
+        setTimeout(() => navigateBackToLibrary(), 0);
+      }
+    } else {
+      hasScheduledEmptyFallback.current = false;
+    }
+  }, [bookKeys]);
+
+  useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     if (!primaryBookKey || !bookData || !bookData.book || !bookData.bookDoc || !viewSettings) {
       if (!errorLoading) {
@@ -225,7 +237,16 @@ const ReaderContent: React.FC<{ ids?: string }> = ({ ids }) => {
     };
   }, [primaryBookKey, bookData, viewSettings, errorLoading]);
 
-  if (!bookKeys || bookKeys.length === 0) return null;
+  if (!bookKeys || bookKeys.length === 0) {
+    return (
+      <div className='hero hero-content full-height flex-col gap-3'>
+        <div className='text-base-content/80 text-sm'>{_('Unable to open book')}</div>
+        <button className='btn btn-primary btn-sm' onClick={navigateBackToLibrary}>
+          {_('Back to library')}
+        </button>
+      </div>
+    );
+  }
 
   if (errorLoading) {
     return (
