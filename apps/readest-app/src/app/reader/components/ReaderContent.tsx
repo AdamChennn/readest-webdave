@@ -47,6 +47,7 @@ const ReaderContent: React.FC<{ ids?: string }> = ({ ids }) => {
   const isInitiating = useRef(false);
   const [loading, setLoading] = useState(false);
   const [errorLoading, setErrorLoading] = useState(false);
+  const hasScheduledFallback = useRef(false);
 
   useBookShortcuts({ sideBarBookKey, bookKeys });
   useGamepad();
@@ -72,10 +73,14 @@ const ReaderContent: React.FC<{ ids?: string }> = ({ ids }) => {
           setErrorLoading(true);
           eventDispatcher.dispatch('toast', {
             message: _('Unable to open book'),
-            callback: () => navigateBackToLibrary(),
+            callback: navigateBackToLibrary,
             timeout: 2000,
             type: 'error',
           });
+          if (!hasScheduledFallback.current) {
+            hasScheduledFallback.current = true;
+            setTimeout(() => navigateBackToLibrary(), 300);
+          }
         });
         if (index === 0) setSideBarBookKey(key);
       }
@@ -202,11 +207,38 @@ const ReaderContent: React.FC<{ ids?: string }> = ({ ids }) => {
     }
   };
 
+  const primaryBookKey = bookKeys?.[0];
+  const bookData = primaryBookKey ? getBookData(primaryBookKey) : undefined;
+  const viewSettings = primaryBookKey ? getViewSettings(primaryBookKey) : undefined;
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (!primaryBookKey || !bookData || !bookData.book || !bookData.bookDoc || !viewSettings) {
+      if (!errorLoading) {
+        timer = setTimeout(() => setLoading(true), 200);
+      }
+    } else {
+      setLoading(false);
+    }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [primaryBookKey, bookData, viewSettings, errorLoading]);
+
   if (!bookKeys || bookKeys.length === 0) return null;
-  const bookData = getBookData(bookKeys[0]!);
-  const viewSettings = getViewSettings(bookKeys[0]!);
+
+  if (errorLoading) {
+    return (
+      <div className='hero hero-content full-height flex-col gap-3'>
+        <div className='text-base-content/80 text-sm'>{_('Unable to open book')}</div>
+        <button className='btn btn-primary btn-sm' onClick={navigateBackToLibrary}>
+          {_('Back to library')}
+        </button>
+      </div>
+    );
+  }
+
   if (!bookData || !bookData.book || !bookData.bookDoc || !viewSettings) {
-    setTimeout(() => setLoading(true), 200);
     return (
       loading &&
       !errorLoading && (
